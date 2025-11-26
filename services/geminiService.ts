@@ -104,13 +104,18 @@ export const generateVeoProductVideo = async (prompt: string, imagesBase64: stri
 
   // Construct reference images payload
   const referenceImagesPayload: any[] = [];
+  
   for (const img of imagesBase64) {
-    // Basic cleaning of base64 prefix if present
-    const cleanData = img.split(',')[1] || img;
+    // Dynamically detect MIME type from base64 string
+    // Format is usually: "data:image/png;base64,iVBOR..."
+    const match = img.match(/^data:(.+);base64,(.+)$/);
+    const mimeType = match ? match[1] : 'image/jpeg'; // Default to jpeg if parsing fails
+    const imageBytes = match ? match[2] : (img.split(',')[1] || img);
+
     referenceImagesPayload.push({
       image: {
-        imageBytes: cleanData,
-        mimeType: 'image/jpeg', // Assuming jpeg/png, API handles standard types
+        imageBytes: imageBytes,
+        mimeType: mimeType,
       },
       referenceType: 'ASSET', // Use generic ASSET type for reference images
     });

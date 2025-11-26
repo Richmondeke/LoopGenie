@@ -8,7 +8,7 @@ import { Settings } from './components/Settings';
 import { Auth } from './components/Auth';
 import { AppView, Template, Project, ProjectStatus } from './types';
 import { generateVideo, checkVideoStatus } from './services/heygenService';
-import { fetchProjects, saveProject, updateProjectStatus, deductCredits } from './services/projectService';
+import { fetchProjects, saveProject, updateProjectStatus, deductCredits, refundCredits } from './services/projectService';
 import { signOut, getSession, onAuthStateChange, getUserProfile } from './services/authService';
 import { Menu, Loader2 } from 'lucide-react';
 import { DEFAULT_HEYGEN_API_KEY } from './constants';
@@ -23,6 +23,9 @@ const App: React.FC = () => {
 
   const [currentView, setCurrentView] = useState<AppView>(AppView.TEMPLATES);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  // Track which view of the gallery to show when returning (Dashboard vs Avatar List)
+  const [galleryInitialView, setGalleryInitialView] = useState<'DASHBOARD' | 'AVATAR_SELECT'>('DASHBOARD');
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -137,13 +140,19 @@ const App: React.FC = () => {
   };
 
   const handleSelectTemplate = (template: Template) => {
+    // Determine return view based on template type
+    if (template.mode === 'AVATAR') {
+        setGalleryInitialView('AVATAR_SELECT');
+    } else {
+        setGalleryInitialView('DASHBOARD');
+    }
     setSelectedTemplate(template);
   };
 
   const handleGenerate = async (data: any) => {
     if (!selectedTemplate || !session) return;
     
-    // Check credits again
+    // 1. Pre-check credits locally
     const cost = data.cost || 1;
     if (userCredits < cost) {
         alert("Insufficient credits to generate this video.");
@@ -153,13 +162,20 @@ const App: React.FC = () => {
     try {
         setIsGenerating(true);
 
-        // Deduct Credits first (optimistic)
-        await deductCredits(session.user.id, cost);
+        // 2. Deduct Credits in DB
+        // We do this BEFORE generation to prevent "free usage" if they close the tab
+        // If generation fails, we will REFUND them in the catch block.
+        const newBalance = await deductCredits(session.user.id, cost);
+        
+        // Update UI locally immediately
         setUserCredits(prev => Math.max(0, prev - cost));
 
-        // CASE 1: Direct Save (Veo/UGC Product Videos)
+        // 3. Generate Video
+        let newProject: Project;
+
+        // CASE A: Direct Save (Veo/UGC Product Videos)
         if (data.isDirectSave) {
-            const newProject: Project = {
+            newProject = {
                 id: `ugc_${Date.now()}`,
                 templateId: selectedTemplate.id,
                 templateName: selectedTemplate.name,
@@ -170,46 +186,52 @@ const App: React.FC = () => {
                 type: 'UGC_PRODUCT',
                 cost: cost
             };
-            
-            await saveProject(newProject); // Save to DB
+        } else {
+            // CASE B: Async Generation (HeyGen Avatar Videos)
+            const jobId = await generateVideo(
+                heyGenKey,
+                selectedTemplate.id,
+                data.variables,
+                data.avatarId,
+                data.voiceId
+            );
 
-            setProjects(prev => [newProject, ...prev]);
-            setSelectedTemplate(null);
-            setCurrentView(AppView.PROJECTS);
-            return;
+            newProject = {
+                id: jobId,
+                templateId: selectedTemplate.id,
+                templateName: selectedTemplate.name,
+                thumbnailUrl: selectedTemplate.thumbnailUrl,
+                status: ProjectStatus.PENDING,
+                createdAt: Date.now(),
+                type: 'AVATAR',
+                cost: cost
+            };
         }
 
-        // CASE 2: Async Generation (HeyGen Avatar Videos)
-        const jobId = await generateVideo(
-            heyGenKey,
-            selectedTemplate.id,
-            data.variables,
-            data.avatarId,
-            data.voiceId
-        );
-
-        const newProject: Project = {
-            id: jobId,
-            templateId: selectedTemplate.id,
-            templateName: selectedTemplate.name,
-            thumbnailUrl: selectedTemplate.thumbnailUrl,
-            status: ProjectStatus.PENDING,
-            createdAt: Date.now(),
-            type: 'AVATAR',
-            cost: cost
-        };
-
-        await saveProject(newProject); // Save to DB
-
+        // 4. Save Project to DB
+        await saveProject(newProject);
         setProjects(prev => [newProject, ...prev]);
         setSelectedTemplate(null);
         setCurrentView(AppView.PROJECTS);
         
+        // 5. Re-sync credits from DB just to be sure
+        loadProfile(session.user.id);
+
     } catch (error: any) {
         console.error("Generation failed:", error);
-        alert(`Failed to generate: ${error.message}`);
-        // Reload credits to ensure sync if deduction failed or API failed
-        if (session) loadProfile(session.user.id);
+        
+        // REFUND LOGIC
+        // If we successfully deducted (or tried to), but generation failed, give it back.
+        // We assume deductCredits succeeded if we reached here from the generating line.
+        try {
+            await refundCredits(session.user.id, cost);
+            loadProfile(session.user.id); // Reload to show refunded amount
+            console.log("Credits refunded due to generation failure.");
+        } catch (refundError) {
+            console.error("Failed to refund credits:", refundError);
+        }
+
+        alert(`Generation Failed: ${error.message || "Unknown error"}. \n\nCredits have been refunded.`);
     } finally {
         setIsGenerating(false);
     }
@@ -231,7 +253,13 @@ const App: React.FC = () => {
 
     switch (currentView) {
       case AppView.TEMPLATES:
-        return <TemplateGallery onSelectTemplate={handleSelectTemplate} heyGenKey={heyGenKey} />;
+        return (
+            <TemplateGallery 
+                onSelectTemplate={handleSelectTemplate} 
+                heyGenKey={heyGenKey} 
+                initialView={galleryInitialView}
+            />
+        );
       case AppView.PROJECTS:
         return <ProjectList projects={projects} onPollStatus={pollStatuses} />;
       case AppView.SETTINGS:
@@ -270,6 +298,8 @@ const App: React.FC = () => {
             setCurrentView(view);
             setSelectedTemplate(null);
             setIsMobileMenuOpen(false);
+            // Reset gallery view when changing main tabs
+            setGalleryInitialView('DASHBOARD');
         }}
         isMobileOpen={isMobileMenuOpen}
         toggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}

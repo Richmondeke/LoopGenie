@@ -4,41 +4,32 @@ import { User, Loader2, ShoppingBag } from 'lucide-react';
 import { Template, HeyGenAvatar } from '../types';
 import { getAvatars } from '../services/heygenService';
 
-interface TemplateGalleryProps {
+export interface TemplateGalleryProps {
   onSelectTemplate: (template: Template) => void;
   heyGenKey?: string;
+  initialView?: 'DASHBOARD' | 'AVATAR_SELECT';
 }
 
 type GalleryView = 'DASHBOARD' | 'AVATAR_SELECT';
 
-export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTemplate, heyGenKey }) => {
-  const [view, setView] = useState<GalleryView>('DASHBOARD');
+export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTemplate, heyGenKey, initialView = 'DASHBOARD' }) => {
+  const [view, setView] = useState<GalleryView>(initialView);
   const [avatars, setAvatars] = useState<HeyGenAvatar[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [genderFilter, setGenderFilter] = useState<'ALL' | 'male' | 'female'>('ALL');
 
   useEffect(() => {
     // Pre-fetch avatars so they are ready when clicking the card
     const fetchRealAvatars = async () => {
         // If we already have avatars and no key change, don't refetch unless empty
+        // The service layer handles API caching.
         if (!heyGenKey && avatars.length > 0) return;
         
         setIsLoading(true);
         try {
             const realAvatars = await getAvatars(heyGenKey || '');
-            const source = realAvatars;
-            
-            // Filter for 2 Males and 2 Females if available
-            const males = source.filter(a => a.gender === 'male').slice(0, 2);
-            const females = source.filter(a => a.gender === 'female').slice(0, 2);
-            
-            // If we don't have enough specific genders, just fill up with whatever is left up to 4
-            let combined = [...males, ...females];
-            if (combined.length < 4) {
-                const remaining = source.filter(a => !combined.some(c => c.id === a.id)).slice(0, 4 - combined.length);
-                combined = [...combined, ...remaining];
-            }
-
-            setAvatars(combined);
+            // Load ALL avatars, do not slice/limit them.
+            setAvatars(realAvatars);
         } catch (e) {
             console.error("Failed to load avatars", e);
             setAvatars([]);
@@ -75,7 +66,7 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
   const handleSelectProductUGC = () => {
       onSelectTemplate({
           id: 'mode_ugc',
-          name: 'Product Holding Video Generator',
+          name: 'UGC Product Video',
           category: 'AI',
           thumbnailUrl: '',
           variables: [],
@@ -83,10 +74,16 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
       });
   };
 
+  // Helper to filter avatars
+  const filteredAvatars = avatars.filter(avatar => {
+      if (genderFilter === 'ALL') return true;
+      return avatar.gender === genderFilter;
+  });
+
   if (view === 'AVATAR_SELECT') {
       return (
         <div className="h-full flex flex-col">
-            <div className="mb-8 flex items-center gap-4">
+            <div className="mb-8 flex items-center gap-4 flex-shrink-0">
                 <button 
                     onClick={() => setView('DASHBOARD')}
                     className="text-gray-700 hover:text-indigo-700 transition-colors font-medium flex items-center gap-1"
@@ -107,39 +104,70 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
                     <p className="text-indigo-900 font-bold text-xl animate-pulse">..loading up your avatars</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto w-full px-4">
-                    {avatars.length === 0 ? (
-                        <div className="col-span-full text-center text-gray-500 py-10">
-                            No avatars found. Please check your HeyGen API Key in Settings.
-                        </div>
-                    ) : (
-                        avatars.map(avatar => (
-                            <div 
-                                key={avatar.id}
-                                className="group relative bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2"
-                                onClick={() => handleSelectAvatar(avatar)}
-                            >
-                                <div className="aspect-[4/3] sm:aspect-[16/10] bg-gray-100 overflow-hidden relative">
-                                    <img 
-                                        src={avatar.previewUrl} 
-                                        alt={avatar.name} 
-                                        className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
-                                        onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x400?text=Avatar'; }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
-                                    <div className="absolute bottom-6 left-6 text-white">
-                                        <h3 className="font-bold text-2xl mb-1">{avatar.name}</h3>
-                                        <p className="text-sm font-medium opacity-90 uppercase tracking-wider">{avatar.gender}</p>
-                                    </div>
-                                    <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                                         <span className="bg-white text-indigo-900 px-4 py-2 rounded-full font-bold text-sm shadow-lg flex items-center gap-2">
-                                            Select <span className="text-lg">&rarr;</span>
-                                         </span>
-                                    </div>
-                                </div>
+                <div className="flex flex-col h-full overflow-hidden">
+                    {/* Gender Filter Tabs */}
+                    {avatars.length > 0 && (
+                        <div className="flex justify-center mb-6 flex-shrink-0">
+                            <div className="bg-gray-100 p-1.5 rounded-xl inline-flex shadow-inner">
+                                {(['ALL', 'male', 'female'] as const).map((filter) => (
+                                    <button
+                                        key={filter}
+                                        onClick={() => setGenderFilter(filter)}
+                                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all duration-200 capitalize ${
+                                            genderFilter === filter 
+                                            ? 'bg-white text-indigo-600 shadow-sm transform scale-105' 
+                                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                        }`}
+                                    >
+                                        {filter === 'ALL' ? 'All Avatars' : filter}
+                                    </button>
+                                ))}
                             </div>
-                        ))
+                        </div>
                     )}
+
+                    <div className="flex-1 overflow-y-auto min-h-0 px-1 pb-10">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto w-full">
+                            {avatars.length === 0 ? (
+                                <div className="col-span-full text-center text-gray-500 py-10">
+                                    No avatars found. Please check your HeyGen API Key in Settings.
+                                </div>
+                            ) : filteredAvatars.length === 0 ? (
+                                <div className="col-span-full text-center text-gray-400 py-20 flex flex-col items-center">
+                                    <User size={48} className="mb-4 opacity-20" />
+                                    <p>No {genderFilter} avatars found.</p>
+                                </div>
+                            ) : (
+                                filteredAvatars.map(avatar => (
+                                    <div 
+                                        key={avatar.id}
+                                        className="group relative bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2"
+                                        onClick={() => handleSelectAvatar(avatar)}
+                                    >
+                                        <div className="aspect-[4/3] bg-gray-100 overflow-hidden relative">
+                                            <img 
+                                                src={avatar.previewUrl} 
+                                                alt={avatar.name} 
+                                                loading="lazy"
+                                                className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
+                                                onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x400?text=Avatar'; }}
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
+                                            <div className="absolute bottom-4 left-4 text-white">
+                                                <h3 className="font-bold text-lg mb-0.5">{avatar.name}</h3>
+                                                <p className="text-xs font-medium opacity-90 uppercase tracking-wider">{avatar.gender}</p>
+                                            </div>
+                                            <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                                                 <span className="bg-white text-indigo-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-lg flex items-center gap-1">
+                                                    Select &rarr;
+                                                 </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

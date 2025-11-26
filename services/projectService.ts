@@ -62,8 +62,8 @@ export const fetchProjects = async (): Promise<Project[]> => {
   return data.map(mapRowToProject);
 };
 
-export const deductCredits = async (userId: string, amount: number): Promise<void> => {
-    if (!isSupabaseConfigured()) return; // Mock mode assumes infinite or handled locally
+export const deductCredits = async (userId: string, amount: number): Promise<number | null> => {
+    if (!isSupabaseConfigured()) return null; 
 
     // Fetch current
     const { data: profile, error: fetchError } = await supabase
@@ -73,21 +73,41 @@ export const deductCredits = async (userId: string, amount: number): Promise<voi
         .single();
     
     if (fetchError || !profile) {
-        // Fallback if profile doesn't exist yet (auto-creation delay)
-        return; 
+        return null; 
     }
 
     if (profile.credits_balance < amount) {
         throw new Error("Insufficient credits");
     }
 
+    const newBalance = profile.credits_balance - amount;
+
     // Deduct
     const { error: updateError } = await supabase
         .from('profiles')
-        .update({ credits_balance: profile.credits_balance - amount })
+        .update({ credits_balance: newBalance })
         .eq('id', userId);
 
     if (updateError) throw updateError;
+    
+    return newBalance;
+};
+
+export const refundCredits = async (userId: string, amount: number): Promise<void> => {
+    if (!isSupabaseConfigured()) return;
+
+    const { data: profile, error: fetchError } = await supabase
+        .from('profiles')
+        .select('credits_balance')
+        .eq('id', userId)
+        .single();
+    
+    if (fetchError || !profile) return;
+
+    await supabase
+        .from('profiles')
+        .update({ credits_balance: profile.credits_balance + amount })
+        .eq('id', userId);
 };
 
 export const saveProject = async (project: Project) => {

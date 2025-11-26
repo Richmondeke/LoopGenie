@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins } from 'lucide-react';
 import { Template, HeyGenAvatar, HeyGenVoice } from '../types';
@@ -432,7 +431,7 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
                 {/* Left Panel: Inputs */}
                 <div className="w-full lg:w-[400px] flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col gap-6">
                     <div>
-                        <h2 className="text-xl font-semibold mb-1">Product Holding Video Generator</h2>
+                        <h2 className="text-xl font-semibold mb-1">UGC Product Video</h2>
                         <p className="text-gray-400 text-xs">Generate Videos from Product Images using Google's Veo 3.1 model</p>
                     </div>
 
@@ -483,7 +482,7 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
                         <div>
                             <label className="text-xs font-bold text-gray-400 mb-1 block">Resolution</label>
                             <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 text-sm text-gray-300 flex justify-between items-center">
-                                <span>1080p</span>
+                                <span>720p</span>
                                 <div className="rotate-90 text-xs">&rsaquo;</div>
                             </div>
                         </div>
@@ -611,7 +610,7 @@ export const Editor: React.FC<EditorProps> = (props) => {
             <div className="flex items-center gap-3 mb-6 flex-shrink-0">
                 <button onClick={onBack} className="flex items-center gap-2 text-gray-500 hover:text-gray-900 transition-colors group">
                     <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-                    <span className="text-sm font-bold uppercase tracking-wide">Back to Dashboard</span>
+                    <span className="text-sm font-bold uppercase tracking-wide">Back</span>
                 </button>
             </div>
             
