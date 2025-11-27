@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Key, Save, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Key, Save, Eye, EyeOff, CheckCircle, Volume2 } from 'lucide-react';
 
 interface SettingsProps {
   heyGenKey: string;
@@ -12,10 +13,16 @@ export const Settings: React.FC<SettingsProps> = ({
 }) => {
   const [showHeyGen, setShowHeyGen] = useState(false);
   const [localHeyGen, setLocalHeyGen] = useState(heyGenKey);
+  
+  // ElevenLabs Key State
+  const [localElevenKey, setLocalElevenKey] = useState(localStorage.getItem('genavatar_eleven_key') || '');
+  const [showEleven, setShowEleven] = useState(false);
+
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
     setHeyGenKey(localHeyGen);
+    localStorage.setItem('genavatar_eleven_key', localElevenKey);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -37,6 +44,7 @@ export const Settings: React.FC<SettingsProps> = ({
             </div>
 
             <div className="space-y-6">
+                {/* HeyGen Key */}
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">HeyGen API Key</label>
                     <div className="relative">
@@ -54,7 +62,30 @@ export const Settings: React.FC<SettingsProps> = ({
                             {showHeyGen ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">Required for video rendering. Stored locally in your browser.</p>
+                    <p className="text-xs text-gray-500 mt-1">Required for Avatar video rendering.</p>
+                </div>
+
+                {/* ElevenLabs Key */}
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                        ElevenLabs API Key <Volume2 size={14} className="text-gray-400" />
+                    </label>
+                    <div className="relative">
+                        <input
+                            type={showEleven ? "text" : "password"}
+                            value={localElevenKey}
+                            onChange={(e) => setLocalElevenKey(e.target.value)}
+                            className="w-full pl-4 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all"
+                            placeholder="Enter ElevenLabs API Key (Optional)"
+                        />
+                        <button
+                            onClick={() => setShowEleven(!showEleven)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                            {showEleven ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Required for ShortMaker audio synthesis.</p>
                 </div>
             </div>
         </div>
@@ -76,7 +107,7 @@ export const Settings: React.FC<SettingsProps> = ({
       <div className="mt-8 bg-blue-50 border border-blue-100 rounded-xl p-4">
         <h4 className="text-sm font-semibold text-blue-900 mb-1">Note on Security</h4>
         <p className="text-xs text-blue-800 leading-relaxed">
-            This is a client-side demonstration application. Your HeyGen API key is persisted only in your browser's local storage. The Gemini API key is configured via environment variables.
+            This is a client-side demonstration application. Your keys are persisted only in your browser's local storage.
         </p>
       </div>
     </div>

@@ -57,6 +57,107 @@ export const generateScriptContent = async (
   }
 };
 
+// Helper to convert base64 string to Uint8Array
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+// Helper to create a WAV header for raw PCM data
+function createWavHeader(pcmDataLength: number, sampleRate: number = 24000, numChannels: number = 1): Uint8Array {
+  const buffer = new ArrayBuffer(44);
+  const view = new DataView(buffer);
+
+  // RIFF chunk descriptor
+  view.setUint8(0, 'R'.charCodeAt(0));
+  view.setUint8(1, 'I'.charCodeAt(0));
+  view.setUint8(2, 'F'.charCodeAt(0));
+  view.setUint8(3, 'F'.charCodeAt(0));
+  view.setUint32(4, 36 + pcmDataLength, true); // ChunkSize
+  view.setUint8(8, 'W'.charCodeAt(0));
+  view.setUint8(9, 'A'.charCodeAt(0));
+  view.setUint8(10, 'V'.charCodeAt(0));
+  view.setUint8(11, 'E'.charCodeAt(0));
+
+  // fmt sub-chunk
+  view.setUint8(12, 'f'.charCodeAt(0));
+  view.setUint8(13, 'm'.charCodeAt(0));
+  view.setUint8(14, 't'.charCodeAt(0));
+  view.setUint8(15, ' '.charCodeAt(0));
+  view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+  view.setUint16(20, 1, true); // AudioFormat (1 for PCM)
+  view.setUint16(22, numChannels, true); // NumChannels
+  view.setUint32(24, sampleRate, true); // SampleRate
+  view.setUint32(28, sampleRate * numChannels * 2, true); // ByteRate
+  view.setUint16(32, numChannels * 2, true); // BlockAlign
+  view.setUint16(34, 16, true); // BitsPerSample
+
+  // data sub-chunk
+  view.setUint8(36, 'd'.charCodeAt(0));
+  view.setUint8(37, 'a'.charCodeAt(0));
+  view.setUint8(38, 't'.charCodeAt(0));
+  view.setUint8(39, 'a'.charCodeAt(0));
+  view.setUint32(40, pcmDataLength, true); // Subchunk2Size
+
+  return new Uint8Array(buffer);
+}
+
+export const generateSpeech = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: {
+        parts: [{ text: text }]
+      },
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: voiceName }
+          }
+        }
+      }
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!base64Audio) {
+        throw new Error("No audio data returned from Gemini TTS");
+    }
+
+    // Convert raw PCM to WAV
+    const pcmBytes = base64ToUint8Array(base64Audio);
+    const wavHeader = createWavHeader(pcmBytes.length, 24000, 1);
+    
+    // Concatenate header and data
+    const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
+    wavBytes.set(wavHeader);
+    wavBytes.set(pcmBytes, wavHeader.length);
+
+    // Convert back to base64 for data URI (or we could return Blob object URL)
+    const wavBase64 = btoa(
+      Array.from(wavBytes)
+        .map((byte) => String.fromCharCode(byte))
+        .join('')
+    );
+
+    return `data:audio/wav;base64,${wavBase64}`;
+
+  } catch (error: any) {
+    console.error("Gemini TTS Error:", error);
+    if (error.status === 429 || error.message?.includes('RESOURCE_EXHAUSTED')) {
+        throw new Error("Daily AI quota exceeded. Please try again later.");
+     }
+     throw error;
+  }
+};
+
 export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<string> => {
   // Always create a new instance to pick up the latest selected key
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });

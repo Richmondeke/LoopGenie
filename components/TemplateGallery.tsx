@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { User, Loader2, ShoppingBag, Clapperboard } from 'lucide-react';
+import { User, Loader2, ShoppingBag, Clapperboard, Layers, Sparkles, Headphones } from 'lucide-react';
 import { Template, HeyGenAvatar } from '../types';
 import { getAvatars } from '../services/heygenService';
 
@@ -82,6 +83,28 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
           thumbnailUrl: '',
           variables: [],
           mode: 'TEXT_TO_VIDEO'
+      });
+  };
+  
+  const handleSelectShortMaker = () => {
+      onSelectTemplate({
+          id: 'mode_shorts',
+          name: 'ShortMaker',
+          category: 'AI',
+          thumbnailUrl: '',
+          variables: [],
+          mode: 'SHORTS'
+      });
+  };
+
+  const handleSelectAudiobook = () => {
+      onSelectTemplate({
+          id: 'mode_audiobook',
+          name: 'Generate Audiobook',
+          category: 'AI',
+          thumbnailUrl: '',
+          variables: [],
+          mode: 'AUDIOBOOK'
       });
   };
 
@@ -192,15 +215,14 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
         <p className="text-gray-600 font-medium">Select a workflow to get started.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
         
         {/* Card 1: Avatar Video */}
         <div 
             onClick={() => setView('AVATAR_SELECT')}
             className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-indigo-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
         >
-            {/* Image Header */}
-            <div className="h-48 overflow-hidden relative bg-gray-100">
+            <div className="h-40 overflow-hidden relative bg-gray-100">
                 <div className="absolute inset-0 bg-indigo-900/10 group-hover:bg-transparent transition-colors z-10" />
                 <img 
                     src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80" 
@@ -208,18 +230,18 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
                     loading="eager"
                     className="w-full h-full object-cover object-top transform group-hover:scale-110 transition-transform duration-700"
                 />
-                <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-indigo-600 shadow-sm">
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-indigo-600 shadow-sm">
                     <User size={24} />
                 </div>
             </div>
 
             <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Create Avatar Video</h3>
-                <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6">
-                    Choose from premium avatars with lifelike lip-sync and studio voices.
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Avatar Video</h3>
+                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                    Lifelike avatars with premium lip-sync using HeyGen.
                 </p>
-                <span className="mt-auto text-indigo-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
-                    Select <span className="text-xl">&rarr;</span>
+                <span className="mt-auto text-indigo-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
+                    Select Avatar <span className="text-lg">&rarr;</span>
                 </span>
             </div>
         </div>
@@ -229,8 +251,7 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
             onClick={handleSelectProductUGC}
             className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-teal-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
         >
-             {/* Image Header */}
-             <div className="h-48 overflow-hidden relative bg-gray-100">
+             <div className="h-40 overflow-hidden relative bg-gray-100">
                 <div className="absolute inset-0 bg-teal-900/10 group-hover:bg-transparent transition-colors z-10" />
                 <img 
                     src="https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=800&q=80" 
@@ -238,29 +259,28 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
                     loading="eager"
                     className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
                 />
-                <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-teal-600 shadow-sm">
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-teal-600 shadow-sm">
                     <ShoppingBag size={24} />
                 </div>
             </div>
 
             <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Create Product UGC</h3>
-                <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6">
-                    Upload products and generate engaging User Generated Content videos.
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Product UGC</h3>
+                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                    Generate viral UGC product videos using Google Veo.
                 </p>
-                <span className="mt-auto text-teal-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
-                    Create <span className="text-xl">&rarr;</span>
+                <span className="mt-auto text-teal-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
+                    Create Video <span className="text-lg">&rarr;</span>
                 </span>
             </div>
         </div>
 
-        {/* Card 3: AI Video (Text to Video) */}
+        {/* Card 3: AI Video */}
         <div 
             onClick={handleSelectTextToVideo}
             className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-purple-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
         >
-             {/* Image Header */}
-             <div className="h-48 overflow-hidden relative bg-gray-100">
+             <div className="h-40 overflow-hidden relative bg-gray-100">
                 <div className="absolute inset-0 bg-purple-900/10 group-hover:bg-transparent transition-colors z-10" />
                 <img 
                     src="https://images.unsplash.com/photo-1618172193763-c511deb635ca?auto=format&fit=crop&w=800&q=80" 
@@ -268,18 +288,76 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
                     loading="eager"
                     className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
                 />
-                <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-purple-600 shadow-sm">
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-purple-600 shadow-sm">
                     <Clapperboard size={24} />
                 </div>
             </div>
 
             <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Create AI Video</h3>
-                <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6">
-                    Turn your text prompts into cinematic videos instantly using Veo 3.1.
+                <h3 className="text-xl font-bold text-gray-900 mb-2">AI Video</h3>
+                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                    Text-to-video using Veo 3.1 model.
                 </p>
-                <span className="mt-auto text-purple-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
-                    Generate <span className="text-xl">&rarr;</span>
+                <span className="mt-auto text-purple-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
+                    Generate <span className="text-lg">&rarr;</span>
+                </span>
+            </div>
+        </div>
+        
+        {/* Card 4: ShortMaker */}
+        <div 
+            onClick={handleSelectShortMaker}
+            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-pink-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
+        >
+             <div className="h-40 overflow-hidden relative bg-gray-900">
+                <div className="absolute inset-0 bg-pink-900/20 group-hover:bg-transparent transition-colors z-10" />
+                <img 
+                    src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=800&q=80" 
+                    alt="ShortMaker" 
+                    loading="eager"
+                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-pink-600 shadow-sm">
+                    <Sparkles size={24} />
+                </div>
+            </div>
+
+            <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">ShortMaker</h3>
+                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                    Idea to YouTube Short in seconds.
+                </p>
+                <span className="mt-auto text-pink-600 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
+                    Make Short <span className="text-lg">&rarr;</span>
+                </span>
+            </div>
+        </div>
+
+        {/* Card 5: Audiobook */}
+        <div 
+            onClick={handleSelectAudiobook}
+            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-orange-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
+        >
+             <div className="h-40 overflow-hidden relative bg-orange-50">
+                <div className="absolute inset-0 bg-orange-900/10 group-hover:bg-transparent transition-colors z-10" />
+                <img 
+                    src="https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80" 
+                    alt="Audiobook" 
+                    loading="eager"
+                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-orange-600 shadow-sm">
+                    <Headphones size={24} />
+                </div>
+            </div>
+
+            <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Generate Audiobook</h3>
+                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                    Turn any text prompt into high-quality speech.
+                </p>
+                <span className="mt-auto text-orange-600 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
+                    Create Audio <span className="text-lg">&rarr;</span>
                 </span>
             </div>
         </div>
