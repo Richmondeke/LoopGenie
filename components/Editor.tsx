@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard, Layers, Settings as SettingsIcon, Type, MousePointer2, Search, X, Headphones, FileAudio } from 'lucide-react';
+import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard, Layers, Settings as SettingsIcon, Type, MousePointer2, Search, X, Headphones, FileAudio, BookOpen } from 'lucide-react';
 import { Template, HeyGenAvatar, HeyGenVoice, CompositionState, CompositionElement, ElementType } from '../types';
 import { generateScriptContent, generateVeoVideo, generateVeoProductVideo, generateVeoImageToVideo, generateSpeech } from '../services/geminiService';
 import { getAvatars, getVoices } from '../services/heygenService';
@@ -1619,6 +1619,8 @@ export const Editor: React.FC<EditorProps> = (props) => {
         content = <CompositionEditor {...props} />;
     } else if (template.mode === 'SHORTS') {
         content = <ShortMakerEditor {...props} />;
+    } else if (template.mode === 'STORYBOOK') {
+        content = <ShortMakerEditor {...props} />; // Re-use ShortMakerEditor for Storybook (it adapts internally)
     } else if (template.mode === 'AUDIOBOOK') {
         content = <AudiobookEditor {...props} />;
     } else if (template.mode === 'IMAGE_TO_VIDEO') {
