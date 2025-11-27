@@ -23,7 +23,7 @@ export const Auth: React.FC = () => {
     try {
       if (isForgotPassword) {
         await resetPassword(email);
-        setMessage('Password reset link sent to your email.');
+        setMessage('Password reset link sent to your email. Check your inbox (and spam).');
         setLoading(false);
         return;
       }
@@ -33,10 +33,17 @@ export const Auth: React.FC = () => {
         // App.tsx will detect session change
       } else {
         await signUp(email, password, fullName);
-        setMessage('Account created! Please check your email to verify.');
+        // Supabase usually requires email verification
+        setMessage('Account created! Please check your email to verify your account before logging in.');
+        setIsLogin(true); // Switch to login screen
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
+      let msg = err.message || 'Authentication failed';
+      // Enhance error message for common issue
+      if (msg.includes('Invalid login credentials')) {
+          msg += '. Please check your password or verify that you have confirmed your email address.';
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -62,13 +69,14 @@ export const Auth: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center gap-2">
-             <span className="font-bold">Error:</span> {error}
+          <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+             <span className="font-bold block mb-1">Error</span>
+             {error}
           </div>
         )}
 
         {message && (
-          <div className="mb-4 p-3 bg-green-50 text-green-600 text-sm rounded-lg border border-green-100">
+          <div className="mb-4 p-3 bg-green-50 text-green-700 text-sm rounded-lg border border-green-100 font-medium">
              {message}
           </div>
         )}
@@ -161,7 +169,7 @@ export const Auth: React.FC = () => {
         <div className="mt-8 pt-6 border-t border-gray-100 text-center">
           {isForgotPassword ? (
              <button
-               onClick={() => { setIsForgotPassword(false); setIsLogin(true); }}
+               onClick={() => { setIsForgotPassword(false); setIsLogin(true); setError(null); setMessage(null); }}
                className="text-indigo-600 font-bold hover:underline"
              >
                Back to Sign In

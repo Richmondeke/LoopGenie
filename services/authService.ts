@@ -49,12 +49,11 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
 
     if (error) {
       // PGRST116: JSON object requested, multiple (or no) rows returned
-      // This happens if the user exists in Auth but not in the profiles table yet
       if (error.code === 'PGRST116') {
         console.warn("Profile not found for user (PGRST116). Returning default free tier profile.");
         return { 
           id: userId, 
-          email: '', // Email is not critical for credit checks
+          email: '', 
           credits_balance: 5 
         };
       }
@@ -66,11 +65,9 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
       }
 
       console.error("Error fetching profile:", error.message || error);
-      // Return default instead of null to allow app to function
       return { id: userId, email: '', credits_balance: 5 };
     }
     
-    // Return data, defaulting credits to 5 if the column is missing/null
     return {
         ...data,
         credits_balance: (data as any).credits_balance ?? 5
@@ -78,22 +75,18 @@ export const getUserProfile = async (userId: string): Promise<UserProfile | null
 
   } catch (err: any) {
       console.error("Unexpected error in getUserProfile:", err.message || err);
-      // Fallback to prevent app crash
       return { id: userId, email: '', credits_balance: 5 };
   }
 };
 
 export const onAuthStateChange = (callback: (event: string, session: any) => void) => {
   if (!isSupabaseConfigured()) {
-    // Listen for local storage events to simulate auth state change
     const handler = () => {
       const user = getMockUser();
       callback(user ? 'SIGNED_IN' : 'SIGNED_OUT', user ? { user } : null);
     };
     window.addEventListener('auth-change', handler);
-    // Initial call
     handler();
-    
     return { data: { subscription: { unsubscribe: () => window.removeEventListener('auth-change', handler) } } };
   }
   return supabase.auth.onAuthStateChange(callback);
@@ -101,13 +94,11 @@ export const onAuthStateChange = (callback: (event: string, session: any) => voi
 
 export const signUp = async (email: string, password: string, fullName: string) => {
   if (!isSupabaseConfigured()) {
-    // Simulate Signup
     const newUser: User = {
       id: `user_${Date.now()}`,
       email,
       user_metadata: { full_name: fullName }
     };
-    // Auto login for better UX in mock mode
     setMockUser(newUser);
     return { data: { user: newUser, session: { user: newUser } }, error: null };
   }
@@ -119,6 +110,8 @@ export const signUp = async (email: string, password: string, fullName: string) 
       data: {
         full_name: fullName,
       },
+      // Ensure email redirect points back to the app
+      emailRedirectTo: window.location.origin
     },
   });
   if (error) throw error;
@@ -127,7 +120,6 @@ export const signUp = async (email: string, password: string, fullName: string) 
 
 export const signIn = async (email: string, password: string) => {
   if (!isSupabaseConfigured()) {
-    // Simulate Login (Accept any password for demo)
     const mockUser: User = {
       id: 'mock_user_123',
       email,
@@ -156,13 +148,24 @@ export const signOut = async () => {
 
 export const resetPassword = async (email: string) => {
   if (!isSupabaseConfigured()) {
-    // Simulate success
     return { error: null };
   }
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin,
+    redirectTo: window.location.origin, // Redirects back to base URL with token
   });
   if (error) throw error;
+};
+
+// NEW: Function to update password after clicking reset link
+export const updatePassword = async (newPassword: string) => {
+    if (!isSupabaseConfigured()) return { error: null };
+    
+    const { data, error } = await supabase.auth.updateUser({ 
+        password: newPassword 
+    });
+    
+    if (error) throw error;
+    return data;
 };
 
 export const getCurrentUser = async () => {

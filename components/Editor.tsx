@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins } from 'lucide-react';
+import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard } from 'lucide-react';
 import { Template, HeyGenAvatar, HeyGenVoice } from '../types';
 import { generateScriptContent, generateVeoVideo, generateVeoProductVideo } from '../services/geminiService';
 import { getAvatars, getVoices } from '../services/heygenService';
@@ -586,18 +587,176 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
 };
 
 // ==========================================
+// 5. Text to Video Editor (Purple Dark Theme)
+// ==========================================
+const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => {
+    const [prompt, setPrompt] = useState('');
+    const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+    const [status, setStatus] = useState<'idle' | 'generating' | 'completed' | 'error'>('idle');
+    const [videoUri, setVideoUri] = useState<string | null>(null);
+    const [errorMsg, setErrorMsg] = useState('');
+    
+    const COST = 1;
+    const hasSufficientCredits = userCredits >= COST;
+
+    const handleGenerate = async () => {
+        if (!prompt.trim()) {
+            setErrorMsg("Please enter a text prompt.");
+            return;
+        }
+        if (!hasSufficientCredits) {
+            setErrorMsg("Insufficient credits.");
+            return;
+        }
+
+        setStatus('generating');
+        setErrorMsg('');
+        setVideoUri(null);
+
+        try {
+            // Check key
+            if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+                const has = await window.aistudio.hasSelectedApiKey();
+                if (!has) await window.aistudio.openSelectKey();
+            }
+
+            const uri = await generateVeoVideo(prompt, aspectRatio);
+            setVideoUri(uri);
+            setStatus('completed');
+        } catch (error: any) {
+            console.error(error);
+            setStatus('error');
+            setErrorMsg(error.message || "Failed to generate video.");
+        }
+    };
+
+    const handleSaveProject = () => {
+        if (status === 'completed' && videoUri) {
+             onGenerate({
+                 isDirectSave: true,
+                 videoUrl: videoUri,
+                 thumbnailUrl: null, 
+                 cost: COST
+             });
+        }
+    };
+
+    return (
+        <div className="h-full bg-black text-white p-4 lg:p-8 overflow-y-auto rounded-xl">
+             <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto h-full">
+                {/* Left Panel: Inputs */}
+                <div className="w-full lg:w-[400px] flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col gap-6">
+                    <div>
+                        <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
+                            <Clapperboard size={20} className="text-purple-400" />
+                            AI Video Generator
+                        </h2>
+                        <p className="text-gray-400 text-xs">Turn text into cinematic video using Veo 3.1</p>
+                    </div>
+
+                    {/* Prompt */}
+                    <div className="flex-1">
+                        <label className="text-sm font-medium mb-2 block text-gray-300">Prompt</label>
+                        <textarea
+                            value={prompt}
+                            onChange={(e) => setPrompt(e.target.value)}
+                            placeholder="A futuristic city with flying cars in cyberpunk style, cinematic lighting..."
+                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-sm text-white placeholder-gray-500 focus:ring-1 focus:ring-purple-500 outline-none h-48 resize-none leading-relaxed"
+                        />
+                    </div>
+
+                    {/* Controls */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 mb-1 block">Aspect Ratio</label>
+                            <select 
+                                value={aspectRatio}
+                                onChange={(e) => setAspectRatio(e.target.value as any)}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-sm text-gray-300 outline-none focus:border-purple-500"
+                            >
+                                <option value="16:9">16:9 (Landscape)</option>
+                                <option value="9:16">9:16 (Portrait)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-gray-400 mb-1 block">Duration</label>
+                            <div className="bg-gray-800 border border-gray-700 rounded-lg p-2 text-sm text-gray-500 flex justify-between items-center cursor-not-allowed">
+                                <span>~5s (Preview)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Generate Button */}
+                    <button
+                        onClick={handleGenerate}
+                        disabled={status === 'generating' || !hasSufficientCredits}
+                        className={`w-full font-medium py-3 rounded-xl transition-all shadow-lg flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed mt-6 ${
+                            !hasSufficientCredits
+                            ? 'bg-gray-700 text-gray-500 border border-gray-600'
+                            : 'bg-purple-900/80 hover:bg-purple-800 text-purple-100 border border-purple-700'
+                        }`}
+                    >
+                        {status === 'generating' ? (
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="animate-spin" size={20} /> Generating...
+                            </div>
+                        ) : !hasSufficientCredits ? (
+                            <span className="text-sm font-bold">Insufficient Credits</span>
+                        ) : (
+                            <>
+                                <span className="text-sm font-bold">Generate Video</span>
+                                <span className="text-xs opacity-70">{COST} Credit</span>
+                            </>
+                        )}
+                    </button>
+                    {errorMsg && <div className="text-red-400 text-xs text-center">{errorMsg}</div>}
+                </div>
+
+                {/* Right Panel: Preview */}
+                <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-gray-200 font-medium">Output Preview</h2>
+                        {status === 'completed' && (
+                             <button 
+                                onClick={handleSaveProject}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-green-700 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors animate-pulse"
+                             >
+                                <Save size={16} /> Save to Projects
+                             </button>
+                        )}
+                    </div>
+                    
+                    <div className="flex-1 bg-black rounded-xl overflow-hidden relative flex items-center justify-center border border-gray-800">
+                        {status === 'completed' && videoUri ? (
+                            <video src={videoUri} controls autoPlay loop className="w-full h-full object-contain" />
+                        ) : status === 'generating' ? (
+                            <div className="text-center">
+                                <Loader2 className="animate-spin text-purple-500 w-12 h-12 mb-4 mx-auto" />
+                                <p className="text-gray-500 font-medium">Creating magic...</p>
+                            </div>
+                        ) : (
+                            <div className="text-gray-600 flex flex-col items-center">
+                                <Clapperboard size={48} className="mb-2 opacity-20" />
+                                <p>Preview area</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+             </div>
+        </div>
+    );
+};
+
+// ==========================================
 // Main Editor Container
 // ==========================================
 export const Editor: React.FC<EditorProps> = (props) => {
     const { template, onBack } = props;
 
-    // Render logic based on template "mode" or Category
+    // Render logic based on template "mode"
     let content;
-    if (template.mode === 'COMPOSITION') {
-        content = null; // Unused
-    } else if (template.mode === 'SHORTS') {
-        // @ts-ignore
-        content = <ShortsEditor {...props} />;
+    if (template.mode === 'TEXT_TO_VIDEO') {
+        content = <TextToVideoEditor {...props} />;
     } else if (template.mode === 'UGC_PRODUCT') {
         content = <ProductUGCEditor {...props} />;
     } else {

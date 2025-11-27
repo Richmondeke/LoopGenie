@@ -6,6 +6,7 @@ import { Editor } from './components/Editor';
 import { ProjectList } from './components/ProjectList';
 import { Settings } from './components/Settings';
 import { Auth } from './components/Auth';
+import { UpdatePassword } from './components/UpdatePassword';
 import { AppView, Template, Project, ProjectStatus } from './types';
 import { generateVideo, checkVideoStatus } from './services/heygenService';
 import { fetchProjects, saveProject, updateProjectStatus, deductCredits, refundCredits } from './services/projectService';
@@ -20,22 +21,20 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [userCredits, setUserCredits] = useState(0);
   const [authLoading, setAuthLoading] = useState(true);
+  
+  // New state to track if we are in the password recovery flow
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
 
   const [currentView, setCurrentView] = useState<AppView>(AppView.TEMPLATES);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  // Track which view of the gallery to show when returning (Dashboard vs Avatar List)
   const [galleryInitialView, setGalleryInitialView] = useState<'DASHBOARD' | 'AVATAR_SELECT'>('DASHBOARD');
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // API Keys State
   const [heyGenKey, setHeyGenKey] = useState(localStorage.getItem(STORAGE_KEY_HEYGEN) || DEFAULT_HEYGEN_API_KEY);
-  
-  // Generation State
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Load User Profile (Credits)
   const loadProfile = async (userId: string) => {
       const profile = await getUserProfile(userId);
       if (profile) {
@@ -43,9 +42,7 @@ const App: React.FC = () => {
       }
   };
 
-  // Auth Effect
   useEffect(() => {
-    // Check initial session
     getSession().then(({ data }) => {
         setSession(data.session);
         if (data.session?.user) {
@@ -54,8 +51,14 @@ const App: React.FC = () => {
         setAuthLoading(false);
     }).catch(() => setAuthLoading(false));
 
-    // Subscribe to changes
-    const { data } = onAuthStateChange((_event, session) => {
+    const { data } = onAuthStateChange((event, session) => {
+      console.log("Auth Event:", event);
+      
+      // Handle Password Recovery Flow
+      if (event === 'PASSWORD_RECOVERY') {
+          setIsRecoveryMode(true);
+      }
+
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
@@ -70,21 +73,18 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Fetch Projects Effect
   useEffect(() => {
     if (session) {
       fetchProjects().then(setProjects);
     }
   }, [session]);
 
-  // Persist keys effect
   useEffect(() => {
     if (heyGenKey) {
         localStorage.setItem(STORAGE_KEY_HEYGEN, heyGenKey);
     }
   }, [heyGenKey]);
 
-  // Polling Effect
   const pollStatuses = useCallback(async () => {
     if (!session) return;
     
@@ -92,14 +92,11 @@ const App: React.FC = () => {
     if (activeProjects.length === 0) return;
 
     const updatedProjects = await Promise.all(activeProjects.map(async (project) => {
-        // Only poll HeyGen projects (Avatar type)
         if (project.type === 'UGC_PRODUCT') return project;
 
         const result = await checkVideoStatus(heyGenKey, project.id);
         
-        // Only update if changed or we have new data like URL
         if (result.status !== project.status || result.videoUrl) {
-            // Update DB
             await updateProjectStatus(project.id, {
                 status: result.status,
                 videoUrl: result.videoUrl,
@@ -124,11 +121,10 @@ const App: React.FC = () => {
     }));
   }, [projects, heyGenKey, session]);
 
-  // Set up polling interval
   useEffect(() => {
     const interval = setInterval(() => {
         pollStatuses();
-    }, 5000); // Poll every 5 seconds
+    }, 5000); 
     return () => clearInterval(interval);
   }, [pollStatuses]);
 
@@ -140,7 +136,6 @@ const App: React.FC = () => {
   };
 
   const handleSelectTemplate = (template: Template) => {
-    // Determine return view based on template type
     if (template.mode === 'AVATAR') {
         setGalleryInitialView('AVATAR_SELECT');
     } else {
@@ -152,7 +147,6 @@ const App: React.FC = () => {
   const handleGenerate = async (data: any) => {
     if (!selectedTemplate || !session) return;
     
-    // 1. Pre-check credits locally
     const cost = data.cost || 1;
     if (userCredits < cost) {
         alert("Insufficient credits to generate this video.");
@@ -162,18 +156,14 @@ const App: React.FC = () => {
     try {
         setIsGenerating(true);
 
-        // 2. Deduct Credits in DB
-        // We do this BEFORE generation to prevent "free usage" if they close the tab
-        // If generation fails, we will REFUND them in the catch block.
-        const newBalance = await deductCredits(session.user.id, cost);
-        
-        // Update UI locally immediately
-        setUserCredits(prev => Math.max(0, prev - cost));
+        const confirmedBalance = await deductCredits(session.user.id, cost);
+        if (confirmedBalance !== null) {
+            setUserCredits(confirmedBalance);
+        } else {
+             setUserCredits(prev => Math.max(0, prev - cost));
+        }
 
-        // 3. Generate Video
         let newProject: Project;
-
-        // CASE A: Direct Save (Veo/UGC Product Videos)
         if (data.isDirectSave) {
             newProject = {
                 id: `ugc_${Date.now()}`,
@@ -187,7 +177,6 @@ const App: React.FC = () => {
                 cost: cost
             };
         } else {
-            // CASE B: Async Generation (HeyGen Avatar Videos)
             const jobId = await generateVideo(
                 heyGenKey,
                 selectedTemplate.id,
@@ -208,25 +197,19 @@ const App: React.FC = () => {
             };
         }
 
-        // 4. Save Project to DB
         await saveProject(newProject);
         setProjects(prev => [newProject, ...prev]);
         setSelectedTemplate(null);
         setCurrentView(AppView.PROJECTS);
-        
-        // 5. Re-sync credits from DB just to be sure
-        loadProfile(session.user.id);
 
     } catch (error: any) {
         console.error("Generation failed:", error);
         
-        // REFUND LOGIC
-        // If we successfully deducted (or tried to), but generation failed, give it back.
-        // We assume deductCredits succeeded if we reached here from the generating line.
         try {
-            await refundCredits(session.user.id, cost);
-            loadProfile(session.user.id); // Reload to show refunded amount
-            console.log("Credits refunded due to generation failure.");
+            const refundedBalance = await refundCredits(session.user.id, cost);
+            if (refundedBalance !== null) {
+                setUserCredits(refundedBalance);
+            }
         } catch (refundError) {
             console.error("Failed to refund credits:", refundError);
         }
@@ -286,10 +269,17 @@ const App: React.FC = () => {
       );
   }
 
+  // 1. Password Recovery View (Higher priority than Auth or Main App)
+  if (isRecoveryMode) {
+      return <UpdatePassword />;
+  }
+
+  // 2. Auth View
   if (!session) {
       return <Auth />;
   }
 
+  // 3. Main App View
   return (
     <div className="flex h-screen bg-background">
       <Sidebar 
@@ -298,7 +288,6 @@ const App: React.FC = () => {
             setCurrentView(view);
             setSelectedTemplate(null);
             setIsMobileMenuOpen(false);
-            // Reset gallery view when changing main tabs
             setGalleryInitialView('DASHBOARD');
         }}
         isMobileOpen={isMobileMenuOpen}

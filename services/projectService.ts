@@ -65,7 +65,7 @@ export const fetchProjects = async (): Promise<Project[]> => {
 export const deductCredits = async (userId: string, amount: number): Promise<number | null> => {
     if (!isSupabaseConfigured()) return null; 
 
-    // Fetch current
+    // 1. Fetch current balance to ensure we have the latest
     const { data: profile, error: fetchError } = await supabase
         .from('profiles')
         .select('credits_balance')
@@ -73,41 +73,60 @@ export const deductCredits = async (userId: string, amount: number): Promise<num
         .single();
     
     if (fetchError || !profile) {
+        console.error("Error fetching balance for deduction:", fetchError);
         return null; 
     }
 
     if (profile.credits_balance < amount) {
-        throw new Error("Insufficient credits");
+        throw new Error(`Insufficient credits. You have ${profile.credits_balance}, but ${amount} is required.`);
     }
 
     const newBalance = profile.credits_balance - amount;
 
-    // Deduct
-    const { error: updateError } = await supabase
+    // 2. Perform Update and SELECT the result to confirm persistence
+    const { data: updatedProfile, error: updateError } = await supabase
         .from('profiles')
         .update({ credits_balance: newBalance })
-        .eq('id', userId);
+        .eq('id', userId)
+        .select('credits_balance')
+        .single();
 
-    if (updateError) throw updateError;
+    if (updateError) {
+        console.error("Error updating credits:", updateError);
+        throw updateError;
+    }
     
-    return newBalance;
+    // Return the confirmed value from the DB
+    return updatedProfile.credits_balance;
 };
 
-export const refundCredits = async (userId: string, amount: number): Promise<void> => {
-    if (!isSupabaseConfigured()) return;
+export const refundCredits = async (userId: string, amount: number): Promise<number | null> => {
+    if (!isSupabaseConfigured()) return null;
 
+    // Fetch current to be safe
     const { data: profile, error: fetchError } = await supabase
         .from('profiles')
         .select('credits_balance')
         .eq('id', userId)
         .single();
     
-    if (fetchError || !profile) return;
+    if (fetchError || !profile) return null;
 
-    await supabase
+    const newBalance = profile.credits_balance + amount;
+
+    const { data: updatedProfile, error: updateError } = await supabase
         .from('profiles')
-        .update({ credits_balance: profile.credits_balance + amount })
-        .eq('id', userId);
+        .update({ credits_balance: newBalance })
+        .eq('id', userId)
+        .select('credits_balance')
+        .single();
+        
+    if (updateError) {
+        console.error("Error processing refund:", updateError);
+        return null;
+    }
+    
+    return updatedProfile.credits_balance;
 };
 
 export const saveProject = async (project: Project) => {

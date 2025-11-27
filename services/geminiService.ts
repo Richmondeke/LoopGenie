@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScriptGenerationRequest } from "../types";
 
@@ -56,20 +57,21 @@ export const generateScriptContent = async (
   }
 };
 
-export const generateVeoVideo = async (prompt: string): Promise<string> => {
+export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<string> => {
   // Always create a new instance to pick up the latest selected key
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  console.log("Starting Veo generation for:", prompt);
+  console.log("Starting Veo generation for:", prompt, aspectRatio);
 
   try {
+    // veo-3.1-fast-generate-preview for general text-to-video
     let operation = await ai.models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt: prompt,
         config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '9:16' // Shorts format
+            numberOfVideos: 1,
+            resolution: '1080p', // Fast supports 1080p
+            aspectRatio: aspectRatio
         }
     });
 

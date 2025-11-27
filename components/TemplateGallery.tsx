@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Loader2, ShoppingBag } from 'lucide-react';
+import { User, Loader2, ShoppingBag, Clapperboard } from 'lucide-react';
 import { Template, HeyGenAvatar } from '../types';
 import { getAvatars } from '../services/heygenService';
 
@@ -71,6 +71,17 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
           thumbnailUrl: '',
           variables: [],
           mode: 'UGC_PRODUCT'
+      });
+  };
+
+  const handleSelectTextToVideo = () => {
+      onSelectTemplate({
+          id: 'mode_text_video',
+          name: 'AI Video Generator',
+          category: 'AI',
+          thumbnailUrl: '',
+          variables: [],
+          mode: 'TEXT_TO_VIDEO'
       });
   };
 
@@ -175,48 +186,102 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
   }
 
   return (
-    <div className="h-full flex flex-col justify-center max-w-5xl mx-auto pb-10">
+    <div className="h-full flex flex-col justify-center max-w-7xl mx-auto pb-10">
       <div className="mb-10 text-center">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">What would you like to create?</h2>
         <p className="text-gray-600 font-medium">Select a workflow to get started.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 px-4">
         
         {/* Card 1: Avatar Video */}
         <div 
             onClick={() => setView('AVATAR_SELECT')}
-            className="group bg-white rounded-3xl p-8 border border-gray-200 shadow-sm hover:shadow-2xl hover:border-indigo-200 transition-all duration-300 cursor-pointer flex flex-col items-center text-center relative overflow-hidden min-h-[320px]"
+            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-indigo-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
         >
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
-            <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
-                <User size={40} />
+            {/* Image Header */}
+            <div className="h-48 overflow-hidden relative bg-gray-100">
+                <div className="absolute inset-0 bg-indigo-900/10 group-hover:bg-transparent transition-colors z-10" />
+                <img 
+                    src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80" 
+                    alt="Avatar Video" 
+                    loading="eager"
+                    className="w-full h-full object-cover object-top transform group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-indigo-600 shadow-sm">
+                    <User size={24} />
+                </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-3">Create Avatar Video</h3>
-            <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6 max-w-xs">
-                Choose from premium avatars with lifelike lip-sync and studio-quality voices.
-            </p>
-            <span className="mt-auto text-indigo-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
-                Select <span className="text-xl">&rarr;</span>
-            </span>
+
+            <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Create Avatar Video</h3>
+                <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6">
+                    Choose from premium avatars with lifelike lip-sync and studio voices.
+                </p>
+                <span className="mt-auto text-indigo-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
+                    Select <span className="text-xl">&rarr;</span>
+                </span>
+            </div>
         </div>
 
         {/* Card 2: Product UGC */}
         <div 
             onClick={handleSelectProductUGC}
-            className="group bg-white rounded-3xl p-8 border border-gray-200 shadow-sm hover:shadow-2xl hover:border-teal-200 transition-all duration-300 cursor-pointer flex flex-col items-center text-center relative overflow-hidden min-h-[320px]"
+            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-teal-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
         >
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-teal-500 to-emerald-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
-            <div className="w-20 h-20 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
-                <ShoppingBag size={40} />
+             {/* Image Header */}
+             <div className="h-48 overflow-hidden relative bg-gray-100">
+                <div className="absolute inset-0 bg-teal-900/10 group-hover:bg-transparent transition-colors z-10" />
+                <img 
+                    src="https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=800&q=80" 
+                    alt="Product UGC" 
+                    loading="eager"
+                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-teal-600 shadow-sm">
+                    <ShoppingBag size={24} />
+                </div>
             </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-3">Create Product UGC</h3>
-            <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6 max-w-xs">
-                Upload products and generate engaging User Generated Content videos instantly.
-            </p>
-            <span className="mt-auto text-teal-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
-                Create <span className="text-xl">&rarr;</span>
-            </span>
+
+            <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Create Product UGC</h3>
+                <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6">
+                    Upload products and generate engaging User Generated Content videos.
+                </p>
+                <span className="mt-auto text-teal-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
+                    Create <span className="text-xl">&rarr;</span>
+                </span>
+            </div>
+        </div>
+
+        {/* Card 3: AI Video (Text to Video) */}
+        <div 
+            onClick={handleSelectTextToVideo}
+            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-purple-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
+        >
+             {/* Image Header */}
+             <div className="h-48 overflow-hidden relative bg-gray-100">
+                <div className="absolute inset-0 bg-purple-900/10 group-hover:bg-transparent transition-colors z-10" />
+                <img 
+                    src="https://images.unsplash.com/photo-1618172193763-c511deb635ca?auto=format&fit=crop&w=800&q=80" 
+                    alt="AI Video" 
+                    loading="eager"
+                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute top-4 left-4 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-purple-600 shadow-sm">
+                    <Clapperboard size={24} />
+                </div>
+            </div>
+
+            <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Create AI Video</h3>
+                <p className="text-gray-600 font-medium text-sm leading-relaxed mb-6">
+                    Turn your text prompts into cinematic videos instantly using Veo 3.1.
+                </p>
+                <span className="mt-auto text-purple-700 font-bold text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
+                    Generate <span className="text-xl">&rarr;</span>
+                </span>
+            </div>
         </div>
 
       </div>
