@@ -9,7 +9,7 @@ import { Auth } from './components/Auth';
 import { LandingPage } from './components/LandingPage';
 import { UpdatePassword } from './components/UpdatePassword';
 import { AppView, Template, Project, ProjectStatus } from './types';
-import { generateVideo, checkVideoStatus } from './services/heygenService';
+import { generateVideo, checkVideoStatus, getAvatars, getVoices } from './services/heygenService';
 import { fetchProjects, saveProject, updateProjectStatus, deductCredits, refundCredits } from './services/projectService';
 import { signOut, getSession, onAuthStateChange, getUserProfile } from './services/authService';
 import { Menu, Loader2 } from 'lucide-react';
@@ -77,6 +77,17 @@ const App: React.FC = () => {
         }
     };
   }, []);
+
+  // Pre-fetch HeyGen Assets (Avatars & Voices) in background once logged in
+  useEffect(() => {
+    if (session && heyGenKey) {
+        console.log("Pre-fetching HeyGen assets...");
+        // These calls are not awaited so they run in the background
+        // The service layer handles caching, so subsequent calls in Editor will be instant
+        getAvatars(heyGenKey).catch(e => console.warn("Background avatar fetch failed:", e));
+        getVoices(heyGenKey).catch(e => console.warn("Background voice fetch failed:", e));
+    }
+  }, [session, heyGenKey]);
 
   useEffect(() => {
     if (session) {
