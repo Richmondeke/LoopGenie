@@ -1,10 +1,15 @@
 
 import React, { useState } from 'react';
 import { signIn, signUp, resetPassword } from '../services/authService';
-import { Loader2, Mail, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Mail, Lock, User, ArrowRight, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
-export const Auth: React.FC = () => {
-  const [isLogin, setIsLogin] = useState(true);
+interface AuthProps {
+  initialView?: 'LOGIN' | 'SIGNUP';
+  onBack?: () => void;
+}
+
+export const Auth: React.FC<AuthProps> = ({ initialView = 'LOGIN', onBack }) => {
+  const [isLogin, setIsLogin] = useState(initialView === 'LOGIN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -50,7 +55,16 @@ export const Auth: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 relative">
+      {onBack && (
+        <button 
+            onClick={onBack}
+            className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-gray-900 font-medium transition-colors"
+        >
+            <ArrowLeft size={20} /> Back
+        </button>
+      )}
+
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
         <div className="text-center mb-8">
           <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl mx-auto mb-4 shadow-lg transform rotate-3">

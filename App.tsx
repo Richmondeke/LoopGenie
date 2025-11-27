@@ -6,6 +6,7 @@ import { Editor } from './components/Editor';
 import { ProjectList } from './components/ProjectList';
 import { Settings } from './components/Settings';
 import { Auth } from './components/Auth';
+import { LandingPage } from './components/LandingPage';
 import { UpdatePassword } from './components/UpdatePassword';
 import { AppView, Template, Project, ProjectStatus } from './types';
 import { generateVideo, checkVideoStatus } from './services/heygenService';
@@ -21,6 +22,9 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [userCredits, setUserCredits] = useState(0);
   const [authLoading, setAuthLoading] = useState(true);
+  
+  // Navigation State
+  const [authView, setAuthView] = useState<'LOGIN' | 'SIGNUP' | null>(null);
   
   // New state to track if we are in the password recovery flow
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
@@ -62,6 +66,7 @@ const App: React.FC = () => {
       setSession(session);
       if (session?.user) {
         loadProfile(session.user.id);
+        setAuthView(null); // Clear auth view state when logged in
       }
       setAuthLoading(false);
     });
@@ -133,6 +138,7 @@ const App: React.FC = () => {
       setSession(null);
       setProjects([]);
       setCurrentView(AppView.TEMPLATES);
+      setAuthView(null); // Go back to Landing Page
   };
 
   const handleSelectTemplate = (template: Template) => {
@@ -269,17 +275,22 @@ const App: React.FC = () => {
       );
   }
 
-  // 1. Password Recovery View (Higher priority than Auth or Main App)
+  // 1. Password Recovery View (Highest priority)
   if (isRecoveryMode) {
       return <UpdatePassword />;
   }
 
-  // 2. Auth View
+  // 2. Auth Flow (Landing or Login/Signup)
   if (!session) {
-      return <Auth />;
+      if (authView) {
+          // Explicitly showing Login or Signup
+          return <Auth key={authView} initialView={authView} onBack={() => setAuthView(null)} />;
+      }
+      // Show Landing Page by default
+      return <LandingPage onLogin={() => setAuthView('LOGIN')} onSignup={() => setAuthView('SIGNUP')} />;
   }
 
-  // 3. Main App View
+  // 3. Main Dashboard (Authenticated)
   return (
     <div className="flex h-screen bg-background">
       <Sidebar 
