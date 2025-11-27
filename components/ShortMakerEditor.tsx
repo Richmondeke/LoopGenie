@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, Video, Play, Music, Image as ImageIcon, Loader2, Save, Wand2, RefreshCw, BookOpen, Smartphone, CheckCircle, Clock, Film, ChevronRight, AlertCircle, Download } from 'lucide-react';
+import { Sparkles, Video, Play, Music, Image as ImageIcon, Loader2, Save, Wand2, RefreshCw, BookOpen, Smartphone, CheckCircle, Clock, Film, ChevronRight, AlertCircle, Download, Layout, RectangleHorizontal, RectangleVertical, Square, Edit2 } from 'lucide-react';
 import { ShortMakerManifest, ProjectStatus, Template } from '../types';
 import { generateStory, generateSceneImage, synthesizeAudio, assembleVideo } from '../services/shortMakerService';
 
@@ -12,6 +12,8 @@ interface ShortMakerEditorProps {
 }
 
 type ProductionStep = 'INPUT' | 'SCRIPT' | 'VISUALS' | 'AUDIO' | 'ASSEMBLY' | 'COMPLETE';
+type DurationTier = '15s' | '30s' | '60s';
+type AspectRatio = '9:16' | '16:9' | '1:1' | '4:3';
 
 export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGenerate, userCredits, template }) => {
     const isStorybook = template.mode === 'STORYBOOK';
@@ -23,21 +25,30 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
     const [style, setStyle] = useState(isStorybook ? 'Watercolor Illustration' : 'Cinematic');
     const [seed, setSeed] = useState('');
     
+    // New Controls
+    const [duration, setDuration] = useState<DurationTier>('30s');
+    const [aspectRatio, setAspectRatio] = useState<AspectRatio>(isStorybook ? '16:9' : '9:16');
+    
     // Progress Tracking
     const [logs, setLogs] = useState<string[]>([]);
     const [completedImages, setCompletedImages] = useState<number>(0);
     const [isProcessing, setIsProcessing] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [videoUrl, setVideoUrl] = useState<string | null>(null);
+    const [isSaved, setIsSaved] = useState(false);
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    const COST = 3;
+    // Dynamic Cost Calculation
+    const COST = duration === '15s' ? 1 : duration === '30s' ? 2 : 3;
 
     // Helper to add logs
     const addLog = (msg: string) => {
         setLogs(prev => [...prev, msg]);
-        // Auto-scroll logic could go here
+        // Auto-scroll happens via effect or simple ref behavior
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
     };
 
     // -------------------------------------------------------------------------
@@ -47,6 +58,20 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
     const runProduction = async () => {
         if (!idea.trim()) return;
         
+        // 1. Check API Key Availability (Crucial for preventing hangs)
+        if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+            try {
+                const hasKey = await window.aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    await window.aistudio.openSelectKey();
+                    // We proceed assuming the user selected a key. 
+                    // If they cancelled, the subsequent calls will likely fail, caught by try/catch.
+                }
+            } catch (e) {
+                console.warn("API Key check failed, proceeding anyway", e);
+            }
+        }
+
         setIsProcessing(true);
         setStep('SCRIPT');
         setLogs([]);
@@ -54,25 +79,28 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
         setManifest(null);
         setVideoUrl(null);
         setErrorMsg('');
+        setIsSaved(false);
 
         try {
             // STEP 1: SCRIPT / MANIFEST
-            addLog("🧠 Generating story concept and script...");
+            addLog(`🧠 Generating ${duration} story concept and script...`);
             const storyManifest = await generateStory({
                 idea,
                 seed: seed || undefined,
                 style_tone: style,
-                mode: template.mode
+                mode: template.mode,
+                durationTier: duration,
+                aspectRatio: aspectRatio
             });
             setManifest(storyManifest);
-            addLog("✅ Script generated successfully.");
+            addLog(`✅ Script generated successfully (${storyManifest.scenes.length} scenes).`);
             
             // Wait a beat for UI to settle
             await new Promise(r => setTimeout(r, 1000));
 
             // STEP 2: VISUALS
             setStep('VISUALS');
-            addLog("🎨 Starting image generation for 5 scenes...");
+            addLog(`🎨 Starting image generation (${aspectRatio})...`);
             
             // We clone the scenes to update them one by one
             const workingScenes = [...storyManifest.scenes];
@@ -87,7 +115,7 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                         workingScenes[i],
                         generationSeed,
                         style,
-                        isStorybook
+                        aspectRatio // Pass selected AR
                     );
                     
                     workingScenes[i].generated_image_url = url;
@@ -99,6 +127,7 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                 } catch (err) {
                     console.error(`Failed to gen image for scene ${i}`, err);
                     addLog(`❌ Failed to generate image for Scene ${i+1}`);
+                    // We continue even if one image fails (it will be black/blank in video)
                 }
             }
             addLog("✅ Visuals generated.");
@@ -134,8 +163,21 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
             setVideoUrl(finalVideoUrl);
             addLog("✅ Video assembly complete!");
 
-            // FINISH
+            // FINISH & AUTO SAVE
             setStep('COMPLETE');
+
+            // Auto Save
+            onGenerate({
+                isDirectSave: true,
+                videoUrl: finalVideoUrl,
+                thumbnailUrl: manifestWithAudio.scenes[0].generated_image_url,
+                cost: COST,
+                templateName: (isStorybook ? "Story: " : "Short: ") + manifestWithAudio.title,
+                type: isStorybook ? 'STORYBOOK' : 'SHORTS',
+                shouldRedirect: false
+            });
+            setIsSaved(true);
+            addLog("💾 Project saved automatically.");
 
         } catch (e: any) {
             console.error(e);
@@ -143,18 +185,6 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
             addLog(`❌ Critical Error: ${e.message}`);
         } finally {
             setIsProcessing(false);
-        }
-    };
-
-    const handleSaveProject = () => {
-        if (manifest && videoUrl) {
-             onGenerate({
-                isDirectSave: true,
-                videoUrl: videoUrl,
-                thumbnailUrl: manifest.scenes[0].generated_image_url,
-                cost: COST,
-                templateName: (isStorybook ? "Story: " : "Short: ") + manifest.title
-            });
         }
     };
 
@@ -183,7 +213,7 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
     if (step === 'INPUT') {
         return (
             <div className="h-full bg-black text-white p-6 overflow-y-auto flex items-center justify-center">
-                <div className="max-w-xl w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+                <div className="max-w-2xl w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
                      {/* Background Glow */}
                     <div className={`absolute top-0 right-0 w-64 h-64 ${isStorybook ? 'bg-amber-600' : 'bg-pink-600'} opacity-10 blur-[80px] rounded-full pointer-events-none`} />
 
@@ -210,39 +240,91 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Art Style</label>
-                                <select 
-                                    value={style}
-                                    onChange={(e) => setStyle(e.target.value)}
-                                    className="w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-white transition-colors"
-                                >
-                                    <option>Cinematic</option>
-                                    <option>Watercolor Illustration</option>
-                                    <option>Anime</option>
-                                    <option>3D Disney Style</option>
-                                    <option>Cyberpunk</option>
-                                    <option>Oil Painting</option>
-                                    <option>Sketch</option>
-                                </select>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Left Column: Visuals */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Art Style</label>
+                                    <select 
+                                        value={style}
+                                        onChange={(e) => setStyle(e.target.value)}
+                                        className="w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-white transition-colors"
+                                    >
+                                        <option>Cinematic</option>
+                                        <option>Photorealistic</option>
+                                        <option>Watercolor Illustration</option>
+                                        <option>Anime</option>
+                                        <option>3D Disney Style</option>
+                                        <option>Cyberpunk</option>
+                                        <option>Oil Painting</option>
+                                        <option>Sketch</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Seed (Optional)</label>
+                                    <input 
+                                        type="text"
+                                        value={seed}
+                                        onChange={(e) => setSeed(e.target.value)}
+                                        placeholder="Random"
+                                        className="w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-white transition-colors"
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-2">Seed</label>
-                                <input 
-                                    type="text"
-                                    value={seed}
-                                    onChange={(e) => setSeed(e.target.value)}
-                                    placeholder="Random"
-                                    className="w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white outline-none focus:border-white transition-colors"
-                                />
+
+                            {/* Right Column: Format */}
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Duration (Approx)</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {(['15s', '30s', '60s'] as DurationTier[]).map(t => (
+                                            <button
+                                                key={t}
+                                                onClick={() => setDuration(t)}
+                                                className={`py-2 rounded-lg text-sm font-bold border transition-all ${
+                                                    duration === t 
+                                                    ? (isStorybook ? 'bg-amber-600 border-amber-500 text-white' : 'bg-pink-600 border-pink-500 text-white')
+                                                    : 'bg-black/30 border-gray-700 text-gray-400 hover:bg-white/10'
+                                                }`}
+                                            >
+                                                {t}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-2">Aspect Ratio</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { id: '9:16', icon: RectangleVertical, label: '9:16' },
+                                            { id: '16:9', icon: RectangleHorizontal, label: '16:9' },
+                                            { id: '1:1', icon: Square, label: '1:1' },
+                                            { id: '4:3', icon: Layout, label: '4:3' }
+                                        ].map((item) => (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => setAspectRatio(item.id as AspectRatio)}
+                                                className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${
+                                                    aspectRatio === item.id
+                                                    ? (isStorybook ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-pink-600/20 border-pink-500 text-pink-200')
+                                                    : 'bg-black/30 border-gray-700 text-gray-500 hover:bg-white/10'
+                                                }`}
+                                                title={item.label}
+                                            >
+                                                <item.icon size={18} />
+                                                <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <button
                             onClick={runProduction}
                             disabled={!idea.trim()}
-                            className={`w-full ${isStorybook ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-pink-600 to-purple-600'} hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:transform-none`}
+                            className={`w-full ${isStorybook ? 'bg-gradient-to-r from-amber-600 to-orange-600' : 'bg-gradient-to-r from-pink-600 to-purple-600'} hover:opacity-90 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:transform-none mt-4`}
                         >
                             <Wand2 size={20} />
                             <span>Generate Video ({COST} Credits)</span>
@@ -288,7 +370,7 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                             <Loader2 className="animate-spin text-indigo-400" />
                             <span className="text-indigo-200 font-mono text-sm">
                                 {step === 'SCRIPT' && "AI is dreaming up the story..."}
-                                {step === 'VISUALS' && `Painting scenes... (${completedImages}/5)`}
+                                {step === 'VISUALS' && `Painting scenes... (${completedImages}/${manifest?.scenes?.length || '?'})`}
                                 {step === 'AUDIO' && "Recording voiceover..."}
                                 {step === 'ASSEMBLY' && "Stitching final video..."}
                             </span>
@@ -296,26 +378,41 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                     )}
 
                     {errorMsg && (
-                        <div className="mb-6 bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-center gap-3">
-                            <AlertCircle className="text-red-400" />
-                            <span className="text-red-200">{errorMsg}</span>
-                            <button onClick={runProduction} className="ml-auto bg-red-800 px-3 py-1 rounded text-xs hover:bg-red-700">Retry</button>
+                        <div className="mb-6 bg-red-900/20 border border-red-500/50 p-4 rounded-xl flex items-center gap-3 justify-between">
+                            <div className="flex items-center gap-3">
+                                <AlertCircle className="text-red-400" />
+                                <span className="text-red-200">{errorMsg}</span>
+                            </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setStep('INPUT')}
+                                    className="bg-gray-800 border border-gray-700 px-3 py-1 rounded text-xs hover:bg-gray-700 flex items-center gap-1"
+                                >
+                                    <Edit2 size={12} /> Edit Prompt
+                                </button>
+                                <button 
+                                    onClick={runProduction} 
+                                    className="bg-red-800 px-3 py-1 rounded text-xs hover:bg-red-700 flex items-center gap-1"
+                                >
+                                    <RefreshCw size={12} /> Retry
+                                </button>
+                            </div>
                         </div>
                     )}
 
                     {/* Final Video Player */}
                     {step === 'COMPLETE' && videoUrl && (
                         <div className="mb-8 animate-in slide-in-from-top duration-500">
-                             <div className="aspect-video w-full max-w-4xl mx-auto bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 relative group">
+                             <div 
+                                className={`mx-auto bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 relative group`}
+                                style={{ 
+                                    aspectRatio: aspectRatio.replace(':', '/'), 
+                                    maxWidth: aspectRatio === '9:16' ? '400px' : '800px' 
+                                }}
+                             >
                                 <video src={videoUrl} controls autoPlay className="w-full h-full" />
                              </div>
                              <div className="flex justify-center mt-6 gap-4">
-                                <button 
-                                    onClick={handleSaveProject}
-                                    className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-full font-bold flex items-center gap-2 shadow-lg transition-all transform hover:scale-105"
-                                >
-                                    <Save size={20} /> Save Project
-                                </button>
                                 <a 
                                     href={videoUrl} 
                                     download={`story-${Date.now()}.webm`}
@@ -323,13 +420,18 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                                 >
                                     <Download size={20} /> Download
                                 </a>
+                                {isSaved && (
+                                     <div className="bg-green-600/20 text-green-400 border border-green-600/50 px-8 py-3 rounded-full font-bold flex items-center gap-2">
+                                        <CheckCircle size={20} /> Saved to Projects
+                                     </div>
+                                )}
                              </div>
                         </div>
                     )}
 
                     {/* SCENES GRID */}
                     {manifest && (
-                         <div className="space-y-6 max-w-5xl mx-auto">
+                         <div className="space-y-6 max-w-7xl mx-auto">
                             <div className="flex items-center justify-between">
                                 <h4 className="text-gray-400 text-sm font-bold uppercase tracking-wider">Storyboard</h4>
                                 {manifest.generated_audio_url && step !== 'COMPLETE' && (
@@ -339,13 +441,16 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                                 )}
                             </div>
 
-                            <div className={`grid grid-cols-1 ${isStorybook ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5'} gap-4`}>
+                            <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4`}>
                                 {manifest.scenes.map((scene, idx) => (
                                     <div 
                                         key={idx} 
                                         className={`bg-gray-900 border border-gray-800 rounded-xl overflow-hidden flex flex-col transition-all duration-500 ${scene.generated_image_url ? 'opacity-100 scale-100' : 'opacity-50 scale-95'}`}
                                     >
-                                        <div className={`${isStorybook ? 'aspect-video' : 'aspect-[9/16]'} bg-black relative group`}>
+                                        <div 
+                                            className="bg-black relative group"
+                                            style={{ aspectRatio: aspectRatio.replace(':', '/') }}
+                                        >
                                             {scene.generated_image_url ? (
                                                 <img 
                                                     src={scene.generated_image_url} 
@@ -369,7 +474,7 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                                             </div>
                                         </div>
                                         <div className="p-3 flex-1">
-                                            <p className="text-xs text-gray-300 leading-relaxed line-clamp-4">
+                                            <p className="text-xs text-gray-300 leading-relaxed line-clamp-3">
                                                 {scene.narration_text}
                                             </p>
                                         </div>
@@ -400,7 +505,6 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
                                 </span>
                             </div>
                         ))}
-                        <div ref={scrollRef} />
                     </div>
                 </div>
 

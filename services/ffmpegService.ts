@@ -3,11 +3,15 @@
  * Stitches images and audio into a video CLIENT-SIDE using HTML5 Canvas and MediaRecorder.
  * This bypasses external API limits/schemas and works "Live" for immediate testing.
  * Includes audio mixing via Web Audio API.
+ * 
+ * Now supports resizing and cropping (object-cover) to target dimensions.
  */
 export const stitchVideoFrames = async (
   images: string[], 
   audioUrl: string | undefined, 
-  durationPerImageMs: number = 5000
+  durationPerImageMs: number = 5000,
+  targetWidth?: number,
+  targetHeight?: number
 ): Promise<string> => {
   console.log("Starting client-side video stitching with audio...");
 
@@ -17,11 +21,15 @@ export const stitchVideoFrames = async (
   
   if (!ctx) throw new Error("Could not get canvas context");
 
-  // Determine size from first image
-  // We wait for the first image to load to set canvas dimensions
+  // Determine size
+  // If target dimensions are provided, use them. Otherwise infer from first image.
   const firstImage = await loadImage(images[0]);
-  canvas.width = firstImage.naturalWidth;
-  canvas.height = firstImage.naturalHeight;
+  
+  canvas.width = targetWidth || firstImage.naturalWidth;
+  canvas.height = targetHeight || firstImage.naturalHeight;
+  
+  // Clear any existing content
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // 2. Prepare Audio (if exists)
   let audioContext: AudioContext | null = null;
@@ -88,7 +96,7 @@ export const stitchVideoFrames = async (
 
   const recorder = new MediaRecorder(combinedStream, { 
       mimeType, 
-      videoBitsPerSecond: 2500000 
+      videoBitsPerSecond: 5000000 // High bitrate
   });
   
   const chunks: Blob[] = [];
@@ -113,9 +121,35 @@ export const stitchVideoFrames = async (
   for (const imgSrc of images) {
       const img = await loadImage(imgSrc);
       
+      // Calculate Object Cover logic
+      // We want to fill canvas.width x canvas.height with img, maintaining aspect ratio, cropping excess.
+      const imgRatio = img.naturalWidth / img.naturalHeight;
+      const targetRatio = canvas.width / canvas.height;
+      
+      let renderW, renderH, offsetX, offsetY;
+
+      if (imgRatio > targetRatio) {
+          // Image is wider than target
+          renderH = canvas.height;
+          renderW = img.naturalWidth * (canvas.height / img.naturalHeight);
+          offsetX = (canvas.width - renderW) / 2; // Center horizontally
+          offsetY = 0;
+      } else {
+          // Image is taller than target
+          renderW = canvas.width;
+          renderH = img.naturalHeight * (canvas.width / img.naturalWidth);
+          offsetX = 0;
+          offsetY = (canvas.height - renderH) / 2; // Center vertically
+      }
+
+      // Draw frames for the duration
       const startTime = Date.now();
       while (Date.now() - startTime < durationPerImageMs) {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          // Clear and Draw with crop
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, offsetX, offsetY, renderW, renderH);
+          
           // 30 FPS throttle
           await new Promise(r => setTimeout(r, 1000 / 30));
       }

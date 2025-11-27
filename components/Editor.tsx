@@ -1,12 +1,12 @@
 
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard, Layers, Settings as SettingsIcon, Type, MousePointer2, Search, X, Headphones, FileAudio, BookOpen } from 'lucide-react';
+import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard, Layers, Settings as SettingsIcon, Type, MousePointer2, Search, X, Headphones, FileAudio, BookOpen, RectangleHorizontal, RectangleVertical } from 'lucide-react';
 import { Template, HeyGenAvatar, HeyGenVoice, CompositionState, CompositionElement, ElementType } from '../types';
 import { generateScriptContent, generateVeoVideo, generateVeoProductVideo, generateVeoImageToVideo, generateSpeech } from '../services/geminiService';
 import { getAvatars, getVoices } from '../services/heygenService';
 import { searchPexels, readFileAsDataURL, StockAsset } from '../services/mockAssetService';
 import { ShortMakerEditor } from './ShortMakerEditor';
+import { stitchVideoFrames } from '../services/ffmpegService';
 
 interface EditorProps {
   template: Template;
@@ -18,17 +18,22 @@ interface EditorProps {
 }
 
 // ==========================================
-// 1. Avatar Editor (Existing)
+// 1. Avatar Editor (Updated with Crop/FFmpeg support)
 // ==========================================
 const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGenerating, heyGenKey, userCredits }) => {
     const [script, setScript] = useState('');
     const [avatars, setAvatars] = useState<HeyGenAvatar[]>([]);
-    const [allVoices, setAllVoices] = useState<HeyGenVoice[]>([]); // Store all loaded voices
+    const [allVoices, setAllVoices] = useState<HeyGenVoice[]>([]); 
     const [selectedAvatar, setSelectedAvatar] = useState<string>(template.defaultAvatarId || '');
     const [selectedVoice, setSelectedVoice] = useState<string>(template.defaultVoiceId || '');
     
+    // Config Options
+    const [aspectRatio, setAspectRatio] = useState<'9:16' | '16:9'>('9:16'); // Default to Portrait as requested
+    const [generationMode, setGenerationMode] = useState<'HEYGEN' | 'STATIC'>('HEYGEN');
+
     // Resource Loading State
     const [isLoadingResources, setIsLoadingResources] = useState(true);
+    const [isStaticGenerating, setIsStaticGenerating] = useState(false);
     
     // AI State
     const [aiPrompt, setAiPrompt] = useState('');
@@ -42,7 +47,8 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
 
     // Credit Calculation
     const wordCount = script.trim() ? script.trim().split(/\s+/).length : 0;
-    const estimatedCost = Math.max(1, Math.ceil(wordCount / 75));
+    // Static mode is cheaper (e.g. 1 credit vs normal rate)
+    const estimatedCost = generationMode === 'STATIC' ? 1 : Math.max(1, Math.ceil(wordCount / 75));
     const hasSufficientCredits = userCredits >= estimatedCost;
   
     useEffect(() => {
@@ -144,31 +150,67 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
             }
             
             if (voice.previewAudio) {
-                try {
-                    const audio = new Audio(voice.previewAudio);
-                    audio.onended = () => setPlayingVoiceId(null);
-                    audio.onerror = (e) => {
-                        console.error("Audio playback error:", e);
-                        setPlayingVoiceId(null);
-                        alert("Could not play preview. The audio source format may not be supported by your browser.");
-                    };
-                    const playPromise = audio.play();
-                    
-                    if (playPromise !== undefined) {
-                        playPromise
-                        .then(() => {
-                             setPlayingVoiceId(voice.id);
-                             audioRef.current = audio;
-                        })
-                        .catch(err => {
-                            console.error("Audio play failed", err);
-                            setPlayingVoiceId(null);
-                        });
-                    }
-                } catch (err) {
-                    console.error("Audio initialization failed", err);
-                }
+                const audio = new Audio(voice.previewAudio);
+                audio.onended = () => setPlayingVoiceId(null);
+                audio.onerror = () => setPlayingVoiceId(null);
+                audio.play().catch(() => setPlayingVoiceId(null));
+                setPlayingVoiceId(voice.id);
+                audioRef.current = audio;
             }
+        }
+    };
+
+    const triggerGenerate = async () => {
+        if (!hasSufficientCredits) return;
+
+        // STATIC MODE: Generate client-side using FFmpeg/Canvas
+        if (generationMode === 'STATIC') {
+             if (!currentAvatar) return;
+             setIsStaticGenerating(true);
+             try {
+                // 1. Generate Audio
+                // Use Gemini TTS as fallback or primary for this mode
+                const voiceName = currentAvatar.gender === 'female' ? 'Kore' : 'Fenrir';
+                const audioUrl = await generateSpeech(script, voiceName);
+
+                // 2. Stitch using FFmpeg Service (Canvas)
+                // Pass target dimensions for cropping
+                const w = aspectRatio === '9:16' ? 1080 : 1920;
+                const h = aspectRatio === '9:16' ? 1920 : 1080;
+                
+                const videoUrl = await stitchVideoFrames([currentAvatar.previewUrl], audioUrl, 5000, w, h);
+
+                // 3. Save as project
+                onGenerate({
+                    isDirectSave: true,
+                    videoUrl: videoUrl,
+                    thumbnailUrl: currentAvatar.previewUrl,
+                    cost: estimatedCost,
+                    type: 'AVATAR',
+                    templateName: `${currentAvatar.name} (Static)`,
+                    shouldRedirect: true
+                });
+
+             } catch (error) {
+                 console.error(error);
+                 alert("Failed to generate static video");
+             } finally {
+                 setIsStaticGenerating(false);
+             }
+        } 
+        // HEYGEN MODE: Standard API Call
+        else {
+             const w = aspectRatio === '9:16' ? 1080 : 1920;
+             const h = aspectRatio === '9:16' ? 1920 : 1080;
+
+             onGenerate({ 
+                 variables: { script }, 
+                 avatarId: selectedAvatar, 
+                 voiceId: selectedVoice, 
+                 cost: estimatedCost,
+                 // Pass dimensions so heygenService can include them
+                 dimension: { width: w, height: h }
+             });
         }
     };
   
@@ -184,10 +226,10 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
     return (
       <div className="h-full flex flex-col lg:flex-row gap-8 overflow-hidden">
         <div className="flex-1 flex flex-col h-full overflow-y-auto pr-2 pb-20 space-y-8 no-scrollbar">
+            {/* AI Script Section */}
             <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <label className="text-xl font-bold text-gray-900">Script</label>
-                    
                     <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
                         <select 
                             className="text-sm p-2 bg-transparent outline-none text-gray-700 font-medium cursor-pointer"
@@ -238,9 +280,9 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
                 </div>
             </div>
   
+            {/* Voice Section */}
             <div className="space-y-4">
                 <label className="block text-xl font-bold text-gray-900">Voice</label>
-                
                 {filteredVoices.length === 0 ? (
                     <div className="p-8 text-center bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-500">
                          {allVoices.length === 0 
@@ -267,7 +309,6 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
                                         {voice.language} • {voice.gender}
                                     </div>
                                 </div>
-
                                 <div className="absolute right-4">
                                     <button 
                                         onClick={(e) => handlePlayPreview(e, voice)}
@@ -278,7 +319,6 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
                                                 ? 'bg-indigo-200 text-indigo-700 hover:bg-indigo-300'
                                                 : 'bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600'
                                         }`}
-                                        title="Preview Voice"
                                     >
                                         {playingVoiceId === voice.id ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-1" />}
                                     </button>
@@ -290,33 +330,96 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
             </div>
         </div>
   
+        {/* Right Sidebar: Preview & Settings */}
         <div className="w-full lg:w-[400px] flex-shrink-0 flex flex-col gap-4">
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-lg overflow-hidden flex-1 relative min-h-[400px] lg:min-h-0">
-             {currentAvatar ? (
-                 <img 
-                    src={currentAvatar.previewUrl} 
-                    alt="Preview" 
-                    className="w-full h-full object-cover"
-                 />
-             ) : (
-                 <div className="flex items-center justify-center h-full text-gray-400 font-medium bg-gray-50">
-                    No Avatar Selected
-                 </div>
-             )}
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-lg overflow-hidden flex-1 relative min-h-[400px] lg:min-h-0 flex flex-col">
              
-             <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+             {/* Preview Image */}
+             <div className="flex-1 relative overflow-hidden bg-gray-100">
+                 {currentAvatar ? (
+                     <img 
+                        src={currentAvatar.previewUrl} 
+                        alt="Preview" 
+                        className={`w-full h-full object-cover transition-all duration-500 ${aspectRatio === '9:16' ? 'object-cover' : 'object-contain bg-black'}`}
+                     />
+                 ) : (
+                     <div className="flex items-center justify-center h-full text-gray-400 font-medium">
+                        No Avatar Selected
+                     </div>
+                 )}
+                 <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+             </div>
+
+             {/* Output Settings */}
+             <div className="p-4 bg-gray-50 border-t border-gray-200 space-y-4">
+                 
+                 {/* Aspect Ratio Selector */}
+                 <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Format / Crop</label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            onClick={() => setAspectRatio('9:16')}
+                            className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-sm font-medium transition-all ${
+                                aspectRatio === '9:16' 
+                                ? 'bg-indigo-100 border-indigo-500 text-indigo-700' 
+                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            <RectangleVertical size={16} /> 9:16 (Portrait)
+                        </button>
+                        <button
+                            onClick={() => setAspectRatio('16:9')}
+                            className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-sm font-medium transition-all ${
+                                aspectRatio === '16:9' 
+                                ? 'bg-indigo-100 border-indigo-500 text-indigo-700' 
+                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            <RectangleHorizontal size={16} /> 16:9 (Landscape)
+                        </button>
+                    </div>
+                 </div>
+
+                 {/* Generation Mode */}
+                 <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Generation Mode</label>
+                    <div className="flex bg-gray-200 p-1 rounded-xl">
+                        <button
+                            onClick={() => setGenerationMode('HEYGEN')}
+                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                                generationMode === 'HEYGEN' ? 'bg-white shadow-sm text-indigo-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            Lip-Sync
+                        </button>
+                        <button
+                            onClick={() => setGenerationMode('STATIC')}
+                            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+                                generationMode === 'STATIC' ? 'bg-white shadow-sm text-indigo-900' : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            Static (FFmpeg)
+                        </button>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-2 text-center">
+                        {generationMode === 'HEYGEN' 
+                            ? "Premium quality with full lip-sync via HeyGen." 
+                            : "Static image with voiceover. Fast & cropped via FFmpeg."}
+                    </p>
+                 </div>
+             </div>
           </div>
           
           <button
-              onClick={() => onGenerate({ variables: { script }, avatarId: selectedAvatar, voiceId: selectedVoice, cost: estimatedCost })}
-              disabled={isGenerating || !script.trim() || !hasSufficientCredits}
+              onClick={triggerGenerate}
+              disabled={isGenerating || isStaticGenerating || !script.trim() || !hasSufficientCredits}
               className={`w-full font-bold text-xl py-5 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all transform ${
                 !hasSufficientCredits 
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700'
               }`}
           >
-              {isGenerating ? (
+              {isGenerating || isStaticGenerating ? (
                   <Loader2 className="animate-spin" size={28} />
               ) : !hasSufficientCredits ? (
                   <div className="flex flex-col items-center leading-tight">
@@ -336,9 +439,10 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
 };
 
 // ==========================================
-// 8. Audiobook Editor
+// 8. Audiobook Editor (Rest of file unchanged)
 // ==========================================
 const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => {
+// ... existing code ...
     const [topic, setTopic] = useState('');
     const [script, setScript] = useState('');
     const [isScriptLoading, setIsScriptLoading] = useState(false);
@@ -346,6 +450,7 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
     const [voice, setVoice] = useState('Kore'); // Default Gemini voice
+    const [isSaved, setIsSaved] = useState(false);
     
     // Preview State
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
@@ -395,10 +500,22 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
         setIsAudioLoading(true);
         setErrorMsg('');
         setAudioUrl(null);
+        setIsSaved(false);
 
         try {
             const url = await generateSpeech(script, voice);
             setAudioUrl(url);
+            
+            // Auto Save
+            onGenerate({
+                isDirectSave: true,
+                videoUrl: url,
+                thumbnailUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=400&q=80',
+                cost: estimatedCost,
+                type: 'AUDIOBOOK',
+                shouldRedirect: false
+            });
+            setIsSaved(true);
         } catch (e: any) {
             setErrorMsg(e.message || "Failed to generate audio");
         } finally {
@@ -438,18 +555,6 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
             // We usually don't block main UI for preview failures, just log it
         } finally {
             setIsPreviewLoading(false);
-        }
-    };
-
-    const handleSave = () => {
-        if (audioUrl) {
-            onGenerate({
-                isDirectSave: true,
-                videoUrl: audioUrl, // Storing audio URL in videoUrl field for simplicity
-                thumbnailUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=400&q=80',
-                cost: estimatedCost,
-                type: 'AUDIOBOOK'
-            });
         }
     };
 
@@ -566,14 +671,10 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
                             Generate Audio ({estimatedCost} Credits)
                         </button>
 
-                        {audioUrl && (
-                             <button
-                                onClick={handleSave}
-                                className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
-                            >
-                                <Save size={18} />
-                                Save Project
-                            </button>
+                        {isSaved && (
+                            <div className="w-full py-3 rounded-xl bg-green-50 text-green-700 font-bold text-center border border-green-200 text-sm">
+                                Saved to Projects
+                            </div>
                         )}
                     </div>
                 </div>
@@ -581,6 +682,8 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
         </div>
     );
 };
+
+// ... Rest of the existing editors (ProductUGCEditor, TextToVideoEditor, ImageToVideoEditor, CompositionEditor, Editor) ...
 
 // ==========================================
 // 4. Product UGC Editor
@@ -594,6 +697,7 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
     const [status, setStatus] = useState<'idle' | 'generating' | 'completed' | 'error'>('idle');
     const [videoUri, setVideoUri] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [isSaved, setIsSaved] = useState(false);
     const COST = 1;
     const hasSufficientCredits = userCredits >= COST;
 
@@ -628,6 +732,7 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
         setStatus('generating');
         setErrorMsg('');
         setVideoUri(null);
+        setIsSaved(false);
 
         try {
             if (window.aistudio && window.aistudio.hasSelectedApiKey) {
@@ -638,21 +743,22 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
             const uri = await generateVeoProductVideo(prompt, validImages);
             setVideoUri(uri);
             setStatus('completed');
+            
+            // Auto Save
+            onGenerate({
+                 isDirectSave: true,
+                 videoUrl: uri,
+                 thumbnailUrl: images.find(i => i !== null) || null,
+                 cost: COST,
+                 type: 'UGC_PRODUCT',
+                 shouldRedirect: false
+            });
+            setIsSaved(true);
+
         } catch (error: any) {
             console.error(error);
             setStatus('error');
             setErrorMsg(error.message || "Failed to generate video.");
-        }
-    };
-
-    const handleSaveProject = () => {
-        if (status === 'completed' && videoUri) {
-             onGenerate({
-                 isDirectSave: true,
-                 videoUrl: videoUri,
-                 thumbnailUrl: images.find(i => i !== null) || null,
-                 cost: COST
-             });
         }
     };
 
@@ -752,13 +858,10 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
                 <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-gray-200 font-medium">Output Preview</h2>
-                        {status === 'completed' && (
-                             <button 
-                                onClick={handleSaveProject}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-green-700 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors animate-pulse"
-                             >
-                                <Save size={16} /> Save to Projects
-                             </button>
+                        {isSaved && (
+                            <div className="px-3 py-1 bg-green-900/50 text-green-400 text-xs rounded-full border border-green-800">
+                                Saved to Projects
+                            </div>
                         )}
                     </div>
                     
@@ -793,6 +896,7 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
     const [status, setStatus] = useState<'idle' | 'generating' | 'completed' | 'error'>('idle');
     const [videoUri, setVideoUri] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [isSaved, setIsSaved] = useState(false);
     const COST = 1;
     const hasSufficientCredits = userCredits >= COST;
 
@@ -809,6 +913,7 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
         setStatus('generating');
         setErrorMsg('');
         setVideoUri(null);
+        setIsSaved(false);
 
         try {
             if (window.aistudio && window.aistudio.hasSelectedApiKey) {
@@ -819,21 +924,22 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
             const uri = await generateVeoVideo(prompt, aspectRatio);
             setVideoUri(uri);
             setStatus('completed');
+            
+            // Auto Save
+            onGenerate({
+                 isDirectSave: true,
+                 videoUrl: uri,
+                 thumbnailUrl: null, 
+                 cost: COST,
+                 type: 'TEXT_TO_VIDEO',
+                 shouldRedirect: false
+            });
+            setIsSaved(true);
+
         } catch (error: any) {
             console.error(error);
             setStatus('error');
             setErrorMsg(error.message || "Failed to generate video.");
-        }
-    };
-
-    const handleSaveProject = () => {
-        if (status === 'completed' && videoUri) {
-             onGenerate({
-                 isDirectSave: true,
-                 videoUrl: videoUri,
-                 thumbnailUrl: null, 
-                 cost: COST
-             });
         }
     };
 
@@ -897,13 +1003,10 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
                 <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-gray-200 font-medium">Output Preview</h2>
-                        {status === 'completed' && (
-                             <button 
-                                onClick={handleSaveProject}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-green-700 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors animate-pulse"
-                             >
-                                <Save size={16} /> Save to Projects
-                             </button>
+                        {isSaved && (
+                            <div className="px-3 py-1 bg-green-900/50 text-green-400 text-xs rounded-full border border-green-800">
+                                Saved to Projects
+                            </div>
                         )}
                     </div>
                     
@@ -928,6 +1031,7 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
     );
 };
 
+// ... ImageToVideoEditor, CompositionEditor ...
 // ==========================================
 // 9. Image To Video Editor
 // ==========================================
@@ -938,6 +1042,7 @@ const ImageToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) 
     const [status, setStatus] = useState<'idle' | 'generating' | 'completed' | 'error'>('idle');
     const [videoUri, setVideoUri] = useState<string | null>(null);
     const [errorMsg, setErrorMsg] = useState('');
+    const [isSaved, setIsSaved] = useState(false);
     const COST = 1;
     const hasSufficientCredits = userCredits >= COST;
 
@@ -965,6 +1070,7 @@ const ImageToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) 
         setStatus('generating');
         setErrorMsg('');
         setVideoUri(null);
+        setIsSaved(false);
 
         try {
             if (window.aistudio && window.aistudio.hasSelectedApiKey) {
@@ -975,22 +1081,22 @@ const ImageToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) 
             const uri = await generateVeoImageToVideo(prompt, image);
             setVideoUri(uri);
             setStatus('completed');
+            
+            // Auto Save
+            onGenerate({
+                 isDirectSave: true,
+                 videoUrl: uri,
+                 thumbnailUrl: image, 
+                 cost: COST,
+                 type: 'IMAGE_TO_VIDEO',
+                 shouldRedirect: false
+            });
+            setIsSaved(true);
+
         } catch (error: any) {
             console.error(error);
             setStatus('error');
             setErrorMsg(error.message || "Failed to generate video.");
-        }
-    };
-
-    const handleSaveProject = () => {
-        if (status === 'completed' && videoUri) {
-             onGenerate({
-                 isDirectSave: true,
-                 videoUrl: videoUri,
-                 thumbnailUrl: image, 
-                 cost: COST,
-                 type: 'IMAGE_TO_VIDEO'
-             });
         }
     };
 
@@ -1061,13 +1167,10 @@ const ImageToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) 
                 <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-gray-200 font-medium">Output Preview</h2>
-                        {status === 'completed' && (
-                             <button 
-                                onClick={handleSaveProject}
-                                className="flex items-center gap-2 px-4 py-1.5 bg-green-700 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors animate-pulse"
-                             >
-                                <Save size={16} /> Save to Projects
-                             </button>
+                        {isSaved && (
+                            <div className="px-3 py-1 bg-green-900/50 text-green-400 text-xs rounded-full border border-green-800">
+                                Saved to Projects
+                            </div>
                         )}
                     </div>
                     
@@ -1120,6 +1223,7 @@ const DEFAULT_COMPOSITION: CompositionState = {
 };
 
 const CompositionEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => {
+    // ... [Same Composition Editor code] ...
     const [state, setState] = useState<CompositionState>(DEFAULT_COMPOSITION);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [currentTime, setCurrentTime] = useState(0);

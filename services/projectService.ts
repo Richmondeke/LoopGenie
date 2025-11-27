@@ -42,6 +42,31 @@ const saveLocalProjects = (projects: any[]) => {
   localStorage.setItem(PROJECT_STORAGE_KEY, JSON.stringify(projects));
 };
 
+// Helper to save to local storage (reused in fallback)
+const saveToLocalStorage = (project: Project) => {
+    const projects = getLocalProjects();
+    // Check if exists
+    const index = projects.findIndex((p: any) => p.id === project.id);
+    const row = {
+      id: project.id,
+      template_id: project.templateId,
+      template_name: project.templateName,
+      thumbnail_url: project.thumbnailUrl,
+      status: project.status,
+      video_url: project.videoUrl,
+      error: project.error,
+      created_at: project.createdAt,
+      project_type: project.type
+    };
+
+    if (index >= 0) {
+      projects[index] = { ...projects[index], ...row };
+    } else {
+      projects.unshift(row);
+    }
+    saveLocalProjects(projects);
+};
+
 // --- Service Methods ---
 
 export const fetchProjects = async (): Promise<Project[]> => {
@@ -56,7 +81,14 @@ export const fetchProjects = async (): Promise<Project[]> => {
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching projects:', error);
+    // If table is missing (42P01), fall back to local storage gracefully
+    if (error.code === '42P01') {
+        console.warn("Projects table missing in Supabase. Falling back to local storage.");
+        const localData = getLocalProjects();
+        return localData.map(mapRowToProject);
+    }
+
+    console.error('Error fetching projects:', error.message || error);
     return [];
   }
   return data.map(mapRowToProject);
@@ -101,6 +133,10 @@ export const deductCredits = async (userId: string, amount: number): Promise<num
 };
 
 export const refundCredits = async (userId: string, amount: number): Promise<number | null> => {
+    return addCredits(userId, amount);
+};
+
+export const addCredits = async (userId: string, amount: number): Promise<number | null> => {
     if (!isSupabaseConfigured()) return null;
 
     // Fetch current to be safe
@@ -122,7 +158,7 @@ export const refundCredits = async (userId: string, amount: number): Promise<num
         .single();
         
     if (updateError) {
-        console.error("Error processing refund:", updateError);
+        console.error("Error adding credits:", updateError);
         return null;
     }
     
@@ -131,33 +167,15 @@ export const refundCredits = async (userId: string, amount: number): Promise<num
 
 export const saveProject = async (project: Project) => {
   if (!isSupabaseConfigured()) {
-    const projects = getLocalProjects();
-    // Check if exists
-    const index = projects.findIndex((p: any) => p.id === project.id);
-    const row = {
-      id: project.id,
-      template_id: project.templateId,
-      template_name: project.templateName,
-      thumbnail_url: project.thumbnailUrl,
-      status: project.status,
-      video_url: project.videoUrl,
-      error: project.error,
-      created_at: project.createdAt,
-      project_type: project.type
-    };
-
-    if (index >= 0) {
-      projects[index] = { ...projects[index], ...row };
-    } else {
-      projects.unshift(row);
-    }
-    saveLocalProjects(projects);
+    saveToLocalStorage(project);
     return;
   }
 
   const user = await supabase.auth.getUser();
   if (!user.data.user) {
-      throw new Error("User must be logged in to save a project.");
+      // If authenticating fails or running locally without auth but with configured supabase (edge case)
+      saveToLocalStorage(project);
+      return; 
   }
 
   // Ensure template_id is never null
@@ -181,11 +199,17 @@ export const saveProject = async (project: Project) => {
     .upsert(payload);
 
   if (error) {
-    // Graceful fallback for schema mismatch (PGRST204 or specific message)
+    // 1. Fallback: Table missing (42P01) -> Save locally
+    if (error.code === '42P01') {
+        console.warn("Projects table missing in Supabase. Saving to local storage.");
+        saveToLocalStorage(project);
+        return;
+    }
+
+    // 2. Fallback: Schema mismatch (project_type missing) -> Retry without column
     if (error.code === 'PGRST204' || error.message?.includes('project_type')) {
        console.warn("Schema mismatch detected: 'project_type' column missing in DB. Saving without it.");
        
-       // Remove the problematic column and retry
        const { project_type, ...fallbackPayload } = payload;
        
        const retry = await supabase.from('projects').upsert(fallbackPayload);
@@ -229,5 +253,20 @@ export const updateProjectStatus = async (id: string, updates: Partial<Project>)
     .update(dbUpdates)
     .eq('id', id);
 
-  if (error) console.error('Error updating project:', error);
+  if (error) {
+      // If table missing, update local
+      if (error.code === '42P01') {
+          const projects = getLocalProjects();
+          const index = projects.findIndex((p: any) => p.id === id);
+          if (index >= 0) {
+              if (updates.status) projects[index].status = updates.status;
+              if (updates.videoUrl) projects[index].video_url = updates.videoUrl;
+              if (updates.thumbnailUrl) projects[index].thumbnail_url = updates.thumbnailUrl;
+              if (updates.error) projects[index].error = updates.error;
+              saveLocalProjects(projects);
+          }
+          return;
+      }
+      console.error('Error updating project:', error);
+  }
 };

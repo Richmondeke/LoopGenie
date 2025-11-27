@@ -104,10 +104,11 @@ export const getVoices = async (apiKey: string): Promise<HeyGenVoice[]> => {
 
 export const generateVideo = async (
   apiKey: string,
-  templateId: string, // Not used in v2/video/generate but kept for signature compatibility
+  templateId: string, 
   variables: Record<string, string>,
   avatarId?: string,
-  voiceId?: string
+  voiceId?: string,
+  dimension?: { width: number, height: number }
 ): Promise<string> => {
   // Strict check for API Key in production
   if (!apiKey) {
@@ -118,6 +119,9 @@ export const generateVideo = async (
   try {
     const script = variables.script || "Hello, this is a generated video.";
     
+    // Default to 16:9 if not provided
+    const dim = dimension || { width: 1280, height: 720 };
+
     const body = {
         video_inputs: [
             {
@@ -137,8 +141,8 @@ export const generateVideo = async (
                 }
             }
         ],
-        dimension: { width: 1280, height: 720 },
-        test: false // PRODUCTION: Set test to false (or keep as false default)
+        dimension: dim,
+        test: false // PRODUCTION: Set test to false
     };
 
     const response = await fetch(`${HEYGEN_API_BASE}/video/generate`, {

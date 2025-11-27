@@ -1,7 +1,6 @@
 
-
 import React from 'react';
-import { LayoutTemplate, Video, FolderOpen, Settings, HelpCircle, Upload, LogOut, Coins } from 'lucide-react';
+import { LayoutTemplate, Video, FolderOpen, Settings, HelpCircle, Upload, LogOut, Coins, PlusCircle } from 'lucide-react';
 import { AppView } from '../types';
 
 interface SidebarProps {
@@ -11,6 +10,7 @@ interface SidebarProps {
   toggleMobileMenu: () => void;
   onSignOut?: () => void;
   credits: number;
+  onOpenUpgrade: () => void;
 }
 
 const NavItem: React.FC<{
@@ -36,7 +36,7 @@ const NavItem: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isMobileOpen, toggleMobileMenu, onSignOut, credits }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isMobileOpen, toggleMobileMenu, onSignOut, credits, onOpenUpgrade }) => {
   return (
     <>
        {/* Mobile Overlay */}
@@ -115,22 +115,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isM
                </button>
            )}
 
-           <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-100 shadow-sm">
-             <div className="flex items-center gap-2 mb-2">
+           <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-100 shadow-sm relative overflow-hidden group">
+             <div className="flex items-center gap-2 mb-2 relative z-10">
                 <div className="bg-indigo-100 p-1.5 rounded-md text-indigo-600">
                     <Coins size={16} />
                 </div>
                 <div className="text-xs text-indigo-900 font-bold uppercase tracking-wider">Credits Available</div>
              </div>
              
-             <div className="flex items-end gap-1 mb-2">
+             <div className="flex items-end gap-1 mb-3 relative z-10">
                 <span className="text-3xl font-black text-indigo-600 leading-none">{credits}</span>
-                <span className="text-xs text-indigo-400 font-semibold mb-1">/ mo</span>
              </div>
+
+             <button 
+                onClick={onOpenUpgrade}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg shadow-sm flex items-center justify-center gap-1 transition-colors relative z-10"
+             >
+                <PlusCircle size={14} /> Get Credits
+             </button>
              
-             <div className="text-[10px] text-gray-500 font-medium">
-               1 Credit = 30 seconds of video
-             </div>
+             {/* Decorative shimmer */}
+             <div className="absolute top-0 right-0 w-16 h-16 bg-white opacity-20 rounded-full blur-xl transform translate-x-4 -translate-y-4 pointer-events-none" />
            </div>
         </div>
       </div>

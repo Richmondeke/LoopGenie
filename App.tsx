@@ -8,9 +8,10 @@ import { Settings } from './components/Settings';
 import { Auth } from './components/Auth';
 import { LandingPage } from './components/LandingPage';
 import { UpdatePassword } from './components/UpdatePassword';
+import { UpgradeModal } from './components/UpgradeModal';
 import { AppView, Template, Project, ProjectStatus } from './types';
 import { generateVideo, checkVideoStatus, getAvatars, getVoices } from './services/heygenService';
-import { fetchProjects, saveProject, updateProjectStatus, deductCredits, refundCredits } from './services/projectService';
+import { fetchProjects, saveProject, updateProjectStatus, deductCredits, refundCredits, addCredits } from './services/projectService';
 import { signOut, getSession, onAuthStateChange, getUserProfile } from './services/authService';
 import { Menu, Loader2 } from 'lucide-react';
 import { DEFAULT_HEYGEN_API_KEY } from './constants';
@@ -20,13 +21,12 @@ const STORAGE_KEY_HEYGEN = 'genavatar_heygen_key';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [userCredits, setUserCredits] = useState(0);
   const [authLoading, setAuthLoading] = useState(true);
   
   // Navigation State
   const [authView, setAuthView] = useState<'LOGIN' | 'SIGNUP' | null>(null);
-  
-  // New state to track if we are in the password recovery flow
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
 
   const [currentView, setCurrentView] = useState<AppView>(AppView.TEMPLATES);
@@ -35,6 +35,7 @@ const App: React.FC = () => {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   
   const [heyGenKey, setHeyGenKey] = useState(localStorage.getItem(STORAGE_KEY_HEYGEN) || DEFAULT_HEYGEN_API_KEY);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   const loadProfile = async (userId: string) => {
       const profile = await getUserProfile(userId);
       if (profile) {
+          setUserProfile(profile);
           setUserCredits(profile.credits_balance);
       }
   };
@@ -82,8 +84,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (session && heyGenKey) {
         console.log("Pre-fetching HeyGen assets...");
-        // These calls are not awaited so they run in the background
-        // The service layer handles caching, so subsequent calls in Editor will be instant
         getAvatars(heyGenKey).catch(e => console.warn("Background avatar fetch failed:", e));
         getVoices(heyGenKey).catch(e => console.warn("Background voice fetch failed:", e));
     }
@@ -166,7 +166,8 @@ const App: React.FC = () => {
     
     const cost = data.cost || 1;
     if (userCredits < cost) {
-        alert("Insufficient credits to generate this video.");
+        // Automatically open upgrade modal if credits are insufficient
+        setIsUpgradeModalOpen(true);
         return;
     }
 
@@ -185,12 +186,12 @@ const App: React.FC = () => {
             newProject = {
                 id: `ugc_${Date.now()}`,
                 templateId: selectedTemplate.id,
-                templateName: selectedTemplate.name,
+                templateName: data.templateName || selectedTemplate.name,
                 thumbnailUrl: data.thumbnailUrl || 'https://via.placeholder.com/640x360?text=Product+UGC',
                 videoUrl: data.videoUrl,
                 status: ProjectStatus.COMPLETED,
                 createdAt: Date.now(),
-                type: 'UGC_PRODUCT',
+                type: data.type || 'UGC_PRODUCT',
                 cost: cost
             };
         } else {
@@ -216,8 +217,11 @@ const App: React.FC = () => {
 
         await saveProject(newProject);
         setProjects(prev => [newProject, ...prev]);
-        setSelectedTemplate(null);
-        setCurrentView(AppView.PROJECTS);
+        
+        if (data.shouldRedirect !== false) {
+             setSelectedTemplate(null);
+             setCurrentView(AppView.PROJECTS);
+        }
 
     } catch (error: any) {
         console.error("Generation failed:", error);
@@ -235,6 +239,20 @@ const App: React.FC = () => {
     } finally {
         setIsGenerating(false);
     }
+  };
+
+  const handlePaymentSuccess = async (amount: number) => {
+      if (!session) return;
+      try {
+          const newBalance = await addCredits(session.user.id, amount);
+          if (newBalance !== null) {
+              setUserCredits(newBalance);
+              alert(`Successfully added ${amount} credits!`);
+          }
+      } catch (e) {
+          console.error("Failed to add credits:", e);
+          alert("Payment successful, but failed to update balance. Please contact support.");
+      }
   };
 
   const renderContent = () => {
@@ -286,24 +304,15 @@ const App: React.FC = () => {
       );
   }
 
-  // 1. Password Recovery View (Highest priority)
-  if (isRecoveryMode) {
-      return <UpdatePassword />;
-  }
+  if (isRecoveryMode) return <UpdatePassword />;
 
-  // 2. Auth Flow (Landing or Login/Signup)
   if (!session) {
-      if (authView) {
-          // Explicitly showing Login or Signup
-          return <Auth key={authView} initialView={authView} onBack={() => setAuthView(null)} />;
-      }
-      // Show Landing Page by default
+      if (authView) return <Auth key={authView} initialView={authView} onBack={() => setAuthView(null)} />;
       return <LandingPage onLogin={() => setAuthView('LOGIN')} onSignup={() => setAuthView('SIGNUP')} />;
   }
 
-  // 3. Main Dashboard (Authenticated)
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background relative">
       <Sidebar 
         currentView={currentView} 
         onChangeView={(view) => {
@@ -316,6 +325,7 @@ const App: React.FC = () => {
         toggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
         onSignOut={handleSignOut}
         credits={userCredits}
+        onOpenUpgrade={() => setIsUpgradeModalOpen(true)}
       />
 
       <main className="flex-1 overflow-hidden flex flex-col relative">
@@ -329,6 +339,16 @@ const App: React.FC = () => {
             {renderContent()}
         </div>
       </main>
+
+      {/* Upgrade Modal Overlay */}
+      {isUpgradeModalOpen && (
+        <UpgradeModal 
+            onClose={() => setIsUpgradeModalOpen(false)}
+            onSuccess={handlePaymentSuccess}
+            userEmail={session.user.email || ''}
+            userName={userProfile?.full_name || ''}
+        />
+      )}
     </div>
   );
 };

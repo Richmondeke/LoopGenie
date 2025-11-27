@@ -1,5 +1,4 @@
-
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ShortMakerManifest, ShortMakerScene } from "../types";
 import { stitchVideoFrames } from "./ffmpegService";
 import { generatePollinationsImage } from "./pollinationsService";
@@ -16,14 +15,32 @@ export interface GenerateStoryRequest {
   voice_preference?: any;
   style_tone?: string;
   mode?: 'SHORTS' | 'STORYBOOK';
+  durationTier?: '15s' | '30s' | '60s';
+  aspectRatio?: '9:16' | '16:9' | '1:1' | '4:3';
 }
+
+const withTimeout = <T>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> => {
+    let timer: any;
+    const timeoutPromise = new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(errorMsg)), ms);
+    });
+    return Promise.race([
+        promise.then(res => { clearTimeout(timer); return res; }),
+        timeoutPromise
+    ]);
+};
 
 export const generateStory = async (req: GenerateStoryRequest): Promise<ShortMakerManifest> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const isStorybook = req.mode === 'STORYBOOK';
-  // Aspect ratio instructions for the text model
-  const ratioText = isStorybook ? "16:9 Landscape" : "9:16 Portrait";
+  // 1. Determine constraints based on user input
+  const durationMap: Record<string, number> = {
+      '15s': 3,
+      '30s': 6,
+      '60s': 12
+  };
+  const targetScenes = durationMap[req.durationTier || '30s'] || 5;
+  const ratioText = req.aspectRatio || (req.mode === 'STORYBOOK' ? "16:9" : "9:16");
 
   // CRITICAL FIX: Sanitize reference_image_url to ensure no huge Base64 strings are passed in text prompt
   const refImageClean = req.reference_image_url && req.reference_image_url.startsWith('data:') 
@@ -38,15 +55,15 @@ SYSTEM: You are a deterministic content generator. Receive a single short idea a
 
 CONSTRAINTS (CRITICAL):
 - Output MUST be valid JSON.
-- Total JSON length MUST be under 8000 characters to avoid truncation.
+- Total JSON length MUST be under 30000 characters.
 - title: Max 6 words.
 - final_caption: Max 8 words.
-- scenes: Exactly 5 scenes.
+- scenes: Exactly ${targetScenes} scenes.
 - narration_text: Max 20 words per scene. Keep it punchy.
 - visual_description: Max 15 words per scene. Concise.
-- image_prompt: Max 20 words per scene. Optimized for diffusion models.
-- character_tokens: Max 3 items.
-- environment_tokens: Max 3 items.
+- image_prompt: Max 30 words per scene. Focus on visual details of the character and setting.
+- character_tokens: Max 3 descriptive items (e.g. "young boy red cap", "robotic cat").
+- environment_tokens: Max 3 descriptive items (e.g. "cyberpunk city rain", "sunny meadow").
 
 Do not be verbose. Be extremely concise.
   `;
@@ -58,7 +75,8 @@ ReferenceImage: "${refImageClean}"
 VoicePref: "${JSON.stringify(req.voice_preference || {})}"
 StyleTone: "${req.style_tone || ''}"
 Mode: "${req.mode || 'SHORTS'}"
-Ratio: "${ratioText}"
+TargetDuration: "${req.durationTier || '30s'}"
+AspectRatio: "${ratioText}"
   `;
 
   // Schema Definition for Strict JSON
@@ -112,7 +130,8 @@ Ratio: "${ratioText}"
   };
 
   try {
-    const response = await ai.models.generateContent({
+    // 30 Seconds timeout for story generation
+    const response = await withTimeout(ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: userPrompt,
       config: {
@@ -120,10 +139,9 @@ Ratio: "${ratioText}"
         responseMimeType: "application/json",
         responseSchema: schema,
         temperature: 0.2,
-        // Using a standard high limit, but the prompt constraints are the real fix
         maxOutputTokens: 8192 
       }
-    });
+    }), 30000, "Script generation timed out. Please try again or select a shorter duration.") as GenerateContentResponse;
 
     let text = response.text || "";
     
@@ -137,13 +155,9 @@ Ratio: "${ratioText}"
         const manifest = JSON.parse(text) as ShortMakerManifest;
         
         // Client-side validation
-        if (!manifest.scenes || manifest.scenes.length !== 5) {
-            // Attempt to recover if scenes are missing (unlikely with schema, but possible)
-            if (manifest.scenes && manifest.scenes.length > 0) {
-                console.warn("Manifest has incorrect scene count, proceeding with what we have.");
-            } else {
-                throw new Error("Manifest must have exactly 5 scenes");
-            }
+        if (!manifest.scenes || Math.abs(manifest.scenes.length - targetScenes) > 2) {
+             // We allow a small margin of error (e.g. +/- 2 scenes) but warn
+             console.warn(`Manifest has ${manifest.scenes?.length} scenes, expected ${targetScenes}.`);
         }
         
         return {
@@ -156,9 +170,8 @@ Ratio: "${ratioText}"
         console.error("JSON Parse Error in Story Generation:", parseError);
         console.log("Raw Text Received (First 500 chars):", text.substring(0, 500) + "..."); 
         
-        // Check for common truncation pattern
         if (parseError instanceof SyntaxError && text.length > 8000) {
-             throw new Error("Story generation was too long and got cut off. Please try a simpler idea.");
+             throw new Error("Story generation was too long and got cut off. Try a shorter duration.");
         }
         
         throw new Error("Failed to parse story manifest. Please try again.");
@@ -180,20 +193,64 @@ export const generateSceneImage = async (
     scene: ShortMakerScene, 
     globalSeed: string, 
     styleTone?: string,
-    isLandscape: boolean = false
+    aspectRatio: string = '9:16'
 ): Promise<string> => {
     
-    // Construct prompt
-    const fullPrompt = `
-      ${scene.image_prompt}. 
-      Style: ${styleTone || 'Cinematic'}. 
-      Consistency Tokens: ${scene.character_tokens.join(', ')}. 
-      Environment: ${scene.environment_tokens.join(', ')}.
-    `;
+    // Construct sophisticated prompt for consistency and realism
+    const style = styleTone || 'Cinematic';
+    
+    const characterAnchor = scene.character_tokens.length > 0 
+        ? `Consistent character features: ${scene.character_tokens.join(', ')}` 
+        : '';
+        
+    const envAnchor = scene.environment_tokens.length > 0
+        ? `in ${scene.environment_tokens.join(', ')}`
+        : '';
 
-    // Landscape (16:9) vs Portrait (9:16)
-    const width = isLandscape ? 1280 : 720;
-    const height = isLandscape ? 720 : 1280;
+    // Base prompt: Style first, then subject, then details
+    let fullPrompt = `(${style} style), ${scene.image_prompt}, ${characterAnchor}, ${envAnchor}`;
+
+    // Add quality modifiers based on style
+    if (style.toLowerCase().includes('photo') || style.toLowerCase().includes('realistic') || style.toLowerCase().includes('cinematic')) {
+        fullPrompt += `, photorealistic, 8k uhd, dslr, soft cinematic lighting, highly detailed, film grain, Fujifilm XT3, sharp focus, masterpiece`;
+    } else if (style.toLowerCase().includes('anime')) {
+        fullPrompt += `, studio ghibli style, anime art, high quality, vibrant colors, detailed`;
+    } else if (style.toLowerCase().includes('watercolor') || style.toLowerCase().includes('illustration')) {
+        fullPrompt += `, watercolor painting, soft edges, intricate details, storybook illustration, elegant strokes`;
+    } else if (style.toLowerCase().includes('oil')) {
+        fullPrompt += `, oil painting, textured brushstrokes, classical art, masterpiece`;
+    } else {
+        fullPrompt += `, masterpiece, best quality, ultra-detailed, sharp focus`;
+    }
+
+    // Add negative-like constraints (Flux handles these via natural language mostly)
+    fullPrompt += `, perfect composition, no text, no distortion.`;
+
+    // Calculate dimensions based on Aspect Ratio
+    let width = 720;
+    let height = 1280;
+
+    switch (aspectRatio) {
+        case '16:9':
+            width = 1280;
+            height = 720;
+            break;
+        case '1:1':
+            width = 1024;
+            height = 1024;
+            break;
+        case '4:3':
+            width = 1024;
+            height = 768;
+            break;
+        case '9:16':
+        default:
+            width = 720;
+            height = 1280;
+            break;
+    }
+
+    // We use globalSeed + scene_number to ensure determinism but variation per scene
     const seed = `${globalSeed}-${scene.scene_number}`;
 
     return await generatePollinationsImage(fullPrompt, width, height, seed);
@@ -212,13 +269,24 @@ export const synthesizeAudio = async (
     if (!elevenApiKey) {
         console.log("No ElevenLabs key found, using Gemini TTS...");
         const fullText = manifest.scenes.map(s => s.narration_text).join(". ");
-        const audioUrl = await generateSpeech(fullText, "Fenrir"); // Use a storytelling voice
         
-        // Estimate duration (approx 150 words per minute -> 2.5 words per sec)
-        const wordCount = fullText.split(' ').length;
-        const estDuration = Math.max(25, wordCount / 2.5);
-        
-        return { audioUrl, duration: estDuration };
+        try {
+            // Add timeout for Gemini TTS as well
+            const audioUrl = await withTimeout(
+                generateSpeech(fullText, "Fenrir"), 
+                20000, 
+                "TTS Generation timed out"
+            ); 
+            
+            // Estimate duration (approx 150 words per minute -> 2.5 words per sec)
+            const wordCount = fullText.split(' ').length;
+            const estDuration = Math.max(25, wordCount / 2.5);
+            
+            return { audioUrl, duration: estDuration };
+        } catch (e) {
+            console.error("Gemini TTS Failed inside synthesizeAudio", e);
+            throw e; // Bubble up to be caught by runner
+        }
     }
 
     // 2. Try ElevenLabs if key exists
@@ -266,7 +334,7 @@ export const synthesizeAudio = async (
         console.warn("ElevenLabs failed, falling back to Gemini TTS:", error);
         // Fallback to Gemini
         const text = manifest.scenes.map(s => s.narration_text).join(". ");
-        const url = await generateSpeech(text, "Fenrir");
+        const url = await withTimeout(generateSpeech(text, "Fenrir"), 20000, "Fallback TTS timed out");
         return { audioUrl: url, duration: 25 };
     }
 };

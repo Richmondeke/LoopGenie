@@ -9,7 +9,12 @@ export const generatePollinationsImage = async (prompt: string, width: number, h
     try {
         // We fetch the image to convert it to a Base64 Data URI.
         // This ensures consistent handling in the frontend (Editor preview) and FFMPEG service.
-        const response = await fetch(url);
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 15000); // 15s timeout for image
+
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        
         if (!response.ok) throw new Error("Pollinations API request failed");
 
         const blob = await response.blob();
@@ -19,8 +24,13 @@ export const generatePollinationsImage = async (prompt: string, width: number, h
             reader.onerror = reject;
             reader.readAsDataURL(blob);
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Pollinations generation failed:", error);
+        // Return a placeholder or bubble error depending on strictness
+        // For robustness, we throw so the caller knows this frame failed
+        if (error.name === 'AbortError') {
+             throw new Error("Image generation timed out.");
+        }
         throw error;
     }
 };

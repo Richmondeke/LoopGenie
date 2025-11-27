@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { User, Loader2, ShoppingBag, Clapperboard, Layers, Sparkles, Headphones, Image as ImageIcon, BookOpen } from 'lucide-react';
 import { Template, HeyGenAvatar } from '../types';
@@ -137,6 +135,109 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
       return avatar.gender === genderFilter;
   });
 
+  // Tools Configuration
+  const tools = [
+    // LIVE TOOLS
+    {
+        id: 'avatar_video',
+        title: 'Avatar Video',
+        description: 'Lifelike avatars with premium lip-sync using HeyGen.',
+        icon: <User size={24} />,
+        colorClass: 'text-indigo-600',
+        bgClass: 'bg-indigo-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80',
+        status: 'LIVE',
+        onClick: () => setView('AVATAR_SELECT'),
+        cta: 'Select Avatar'
+    },
+    {
+        id: 'short_maker',
+        title: 'ShortMaker',
+        description: 'Idea to YouTube Short in seconds.',
+        icon: <Sparkles size={24} />,
+        colorClass: 'text-pink-600',
+        bgClass: 'bg-pink-900/20',
+        imgUrl: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=800&q=80',
+        status: 'LIVE',
+        onClick: handleSelectShortMaker,
+        cta: 'Make Short'
+    },
+    {
+        id: 'storybook',
+        title: 'Storybook Video',
+        description: 'Create illustrated stories with narration & visuals.',
+        icon: <BookOpen size={24} />,
+        colorClass: 'text-amber-600',
+        bgClass: 'bg-amber-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=800&q=80',
+        status: 'LIVE',
+        onClick: handleSelectStorybook,
+        cta: 'Create Story'
+    },
+    {
+        id: 'audiobook',
+        title: 'Generate Audiobook',
+        description: 'Turn any text prompt into high-quality speech.',
+        icon: <Headphones size={24} />,
+        colorClass: 'text-orange-600',
+        bgClass: 'bg-orange-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80',
+        status: 'LIVE',
+        onClick: handleSelectAudiobook,
+        cta: 'Create Audio'
+    },
+
+    // COMING SOON / BETA TOOLS
+    {
+        id: 'ai_video',
+        title: 'AI Video',
+        description: 'Text-to-video using Veo 3.1 model.',
+        icon: <Clapperboard size={24} />,
+        colorClass: 'text-purple-600',
+        bgClass: 'bg-purple-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1618172193763-c511deb635ca?auto=format&fit=crop&w=800&q=80',
+        status: 'COMING SOON',
+        onClick: handleSelectTextToVideo,
+        cta: 'Generate'
+    },
+    {
+        id: 'product_ugc',
+        title: 'Product UGC',
+        description: 'Generate viral UGC product videos using Google Veo.',
+        icon: <ShoppingBag size={24} />,
+        colorClass: 'text-teal-600',
+        bgClass: 'bg-teal-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=800&q=80',
+        status: 'COMING SOON',
+        onClick: handleSelectProductUGC,
+        cta: 'Create Video'
+    },
+    {
+        id: 'image_video',
+        title: 'Image to Video',
+        description: 'Animate any image using Google Veo.',
+        icon: <ImageIcon size={24} />,
+        colorClass: 'text-sky-600',
+        bgClass: 'bg-sky-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
+        status: 'COMING SOON',
+        onClick: handleSelectImageToVideo,
+        cta: 'Animate'
+    },
+    {
+        id: 'video_editor',
+        title: 'Video Editor',
+        description: 'Professional timeline editor for compositions.',
+        icon: <Layers size={24} />,
+        colorClass: 'text-gray-600',
+        bgClass: 'bg-gray-900/10',
+        imgUrl: 'https://images.unsplash.com/photo-1574717432707-c25c8587a3ea?auto=format&fit=crop&w=800&q=80',
+        status: 'COMING SOON',
+        onClick: () => {}, // No action implemented
+        cta: 'Open Editor'
+    }
+  ];
+
   if (view === 'AVATAR_SELECT') {
       return (
         <div className="h-full flex flex-col">
@@ -239,210 +340,53 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
-        
-        {/* Card 1: Avatar Video */}
-        <div 
-            onClick={() => setView('AVATAR_SELECT')}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-indigo-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-            <div className="h-40 overflow-hidden relative bg-gray-100">
-                <div className="absolute inset-0 bg-indigo-900/10 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80" 
-                    alt="Avatar Video" 
-                    loading="eager"
-                    className="w-full h-full object-cover object-top transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-indigo-600 shadow-sm">
-                    <User size={24} />
+        {tools.map(tool => (
+            <div 
+                key={tool.id}
+                onClick={tool.status === 'COMING SOON' && tool.id === 'video_editor' ? undefined : tool.onClick}
+                className={`group bg-white rounded-3xl border border-gray-200 shadow-sm transition-all duration-300 flex flex-col relative overflow-hidden ${
+                    tool.status === 'LIVE' 
+                    ? 'hover:shadow-2xl hover:border-indigo-200 cursor-pointer' 
+                    : 'opacity-90 hover:opacity-100 cursor-pointer'
+                }`}
+            >
+                {/* Coming Soon Badge */}
+                {tool.status === 'COMING SOON' && (
+                    <div className="absolute top-4 right-4 z-30 bg-gray-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-gray-700">
+                        COMING SOON
+                    </div>
+                )}
+
+                <div className={`h-40 overflow-hidden relative ${tool.bgClass.replace('/10', '/5')}`}>
+                    <div className={`absolute inset-0 ${tool.bgClass} group-hover:bg-transparent transition-colors z-10`} />
+                    <img 
+                        src={tool.imgUrl} 
+                        alt={tool.title} 
+                        loading="lazy"
+                        className={`w-full h-full object-cover transform transition-transform duration-700 ${
+                            tool.status === 'LIVE' 
+                            ? 'group-hover:scale-110' 
+                            : 'grayscale group-hover:grayscale-0'
+                        }`}
+                    />
+                    <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-sm">
+                        {React.cloneElement(tool.icon as React.ReactElement, { className: tool.colorClass })}
+                    </div>
+                </div>
+
+                <div className="p-6 flex flex-col flex-1">
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">{tool.title}</h3>
+                    <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                        {tool.description}
+                    </p>
+                    <span className={`mt-auto font-bold text-sm flex items-center gap-2 transition-all ${
+                        tool.status === 'LIVE' ? tool.colorClass + ' group-hover:gap-3' : 'text-gray-400'
+                    }`}>
+                        {tool.cta} <span className="text-lg">&rarr;</span>
+                    </span>
                 </div>
             </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Avatar Video</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Lifelike avatars with premium lip-sync using HeyGen.
-                </p>
-                <span className="mt-auto text-indigo-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Select Avatar <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-
-        {/* Card 2: Product UGC */}
-        <div 
-            onClick={handleSelectProductUGC}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-teal-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-             <div className="h-40 overflow-hidden relative bg-gray-100">
-                <div className="absolute inset-0 bg-teal-900/10 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=800&q=80" 
-                    alt="Product UGC" 
-                    loading="eager"
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-teal-600 shadow-sm">
-                    <ShoppingBag size={24} />
-                </div>
-            </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Product UGC</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Generate viral UGC product videos using Google Veo.
-                </p>
-                <span className="mt-auto text-teal-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Create Video <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-
-        {/* Card 3: AI Video */}
-        <div 
-            onClick={handleSelectTextToVideo}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-purple-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-             <div className="h-40 overflow-hidden relative bg-gray-100">
-                <div className="absolute inset-0 bg-purple-900/10 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1618172193763-c511deb635ca?auto=format&fit=crop&w=800&q=80" 
-                    alt="AI Video" 
-                    loading="eager"
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-purple-600 shadow-sm">
-                    <Clapperboard size={24} />
-                </div>
-            </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">AI Video</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Text-to-video using Veo 3.1 model.
-                </p>
-                <span className="mt-auto text-purple-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Generate <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-        
-        {/* Card 4: ShortMaker */}
-        <div 
-            onClick={handleSelectShortMaker}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-pink-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-             <div className="h-40 overflow-hidden relative bg-gray-900">
-                <div className="absolute inset-0 bg-pink-900/20 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=800&q=80" 
-                    alt="ShortMaker" 
-                    loading="eager"
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-pink-600 shadow-sm">
-                    <Sparkles size={24} />
-                </div>
-            </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">ShortMaker</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Idea to YouTube Short in seconds.
-                </p>
-                <span className="mt-auto text-pink-600 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Make Short <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-
-        {/* Card 5: Storybook Video (NEW) */}
-        <div 
-            onClick={handleSelectStorybook}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-amber-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-             <div className="h-40 overflow-hidden relative bg-amber-50">
-                <div className="absolute inset-0 bg-amber-900/10 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=800&q=80" 
-                    alt="Storybook" 
-                    loading="eager"
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-amber-600 shadow-sm">
-                    <BookOpen size={24} />
-                </div>
-            </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Storybook Video</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Create illustrated stories with narration & visuals.
-                </p>
-                <span className="mt-auto text-amber-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Create Story <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-
-        {/* Card 6: Image to Video */}
-        <div 
-            onClick={handleSelectImageToVideo}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-sky-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-             <div className="h-40 overflow-hidden relative bg-gray-100">
-                <div className="absolute inset-0 bg-sky-900/10 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80" 
-                    alt="Image to Video" 
-                    loading="eager"
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-sky-600 shadow-sm">
-                    <ImageIcon size={24} />
-                </div>
-            </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Image to Video</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Animate any image using Google Veo.
-                </p>
-                <span className="mt-auto text-sky-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Animate <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-
-        {/* Card 7: Audiobook */}
-        <div 
-            onClick={handleSelectAudiobook}
-            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-orange-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
-        >
-             <div className="h-40 overflow-hidden relative bg-orange-50">
-                <div className="absolute inset-0 bg-orange-900/10 group-hover:bg-transparent transition-colors z-10" />
-                <img 
-                    src="https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80" 
-                    alt="Audiobook" 
-                    loading="eager"
-                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
-                />
-                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-orange-600 shadow-sm">
-                    <Headphones size={24} />
-                </div>
-            </div>
-
-            <div className="p-6 flex flex-col flex-1">
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Generate Audiobook</h3>
-                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                    Turn any text prompt into high-quality speech.
-                </p>
-                <span className="mt-auto text-orange-600 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
-                    Create Audio <span className="text-lg">&rarr;</span>
-                </span>
-            </div>
-        </div>
-
+        ))}
       </div>
     </div>
   );
