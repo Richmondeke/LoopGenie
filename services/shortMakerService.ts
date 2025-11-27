@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { ShortMakerManifest, ShortMakerScene } from "../types";
+import { stitchVideoFrames } from "./ffmpegService";
 
 // ==========================================
 // 1. GENERATE STORY (Gemini Text)
@@ -243,20 +244,21 @@ export const synthesizeAudio = async (
 };
 
 // ==========================================
-// 4. ASSEMBLE VIDEO (Stub)
+// 4. ASSEMBLE VIDEO (FFMPEG)
 // ==========================================
 
 export const assembleVideo = async (manifest: ShortMakerManifest): Promise<string> => {
-    // In a real implementation, this would send the manifest + asset URLs to a backend
-    // running FFmpeg. 
-    // For this client-side demo, we will verify assets exist and return a 'mock' completion.
-    
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            // For the demo, we'll just return the first generated image as a placeholder "video"
-            // or a static placeholder if none exists.
-            const placeholder = manifest.scenes[0].generated_image_url || "https://via.placeholder.com/1080x1920?text=Short+Video";
-            resolve(placeholder);
-        }, 3000);
-    });
+    // Extract asset URLs from manifest
+    const images = manifest.scenes
+        .map(s => s.generated_image_url)
+        .filter(url => !!url) as string[];
+        
+    const audioUrl = manifest.generated_audio_url;
+
+    if (images.length === 0) {
+        throw new Error("No images generated to assemble video");
+    }
+
+    // Use the new FFMPEG service to stitch inputs
+    return await stitchVideoFrames(images, audioUrl);
 };

@@ -1,7 +1,7 @@
 
 
 import React, { useState, useEffect } from 'react';
-import { User, Loader2, ShoppingBag, Clapperboard, Layers, Sparkles, Headphones } from 'lucide-react';
+import { User, Loader2, ShoppingBag, Clapperboard, Layers, Sparkles, Headphones, Image as ImageIcon } from 'lucide-react';
 import { Template, HeyGenAvatar } from '../types';
 import { getAvatars } from '../services/heygenService';
 
@@ -83,6 +83,17 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
           thumbnailUrl: '',
           variables: [],
           mode: 'TEXT_TO_VIDEO'
+      });
+  };
+
+  const handleSelectImageToVideo = () => {
+      onSelectTemplate({
+          id: 'mode_image_video',
+          name: 'Image to Video',
+          category: 'AI',
+          thumbnailUrl: '',
+          variables: [],
+          mode: 'IMAGE_TO_VIDEO'
       });
   };
   
@@ -303,8 +314,37 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
                 </span>
             </div>
         </div>
+
+        {/* Card 4: Image to Video (NEW) */}
+        <div 
+            onClick={handleSelectImageToVideo}
+            className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-sky-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
+        >
+             <div className="h-40 overflow-hidden relative bg-gray-100">
+                <div className="absolute inset-0 bg-sky-900/10 group-hover:bg-transparent transition-colors z-10" />
+                <img 
+                    src="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80" 
+                    alt="Image to Video" 
+                    loading="eager"
+                    className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700"
+                />
+                <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl text-sky-600 shadow-sm">
+                    <ImageIcon size={24} />
+                </div>
+            </div>
+
+            <div className="p-6 flex flex-col flex-1">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Image to Video</h3>
+                <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
+                    Animate any image using Google Veo.
+                </p>
+                <span className="mt-auto text-sky-700 font-bold text-sm flex items-center gap-2 group-hover:gap-3 transition-all">
+                    Animate <span className="text-lg">&rarr;</span>
+                </span>
+            </div>
+        </div>
         
-        {/* Card 4: ShortMaker */}
+        {/* Card 5: ShortMaker */}
         <div 
             onClick={handleSelectShortMaker}
             className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-pink-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"
@@ -333,7 +373,7 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
             </div>
         </div>
 
-        {/* Card 5: Audiobook */}
+        {/* Card 6: Audiobook */}
         <div 
             onClick={handleSelectAudiobook}
             className="group bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-2xl hover:border-orange-200 transition-all duration-300 cursor-pointer flex flex-col relative overflow-hidden"

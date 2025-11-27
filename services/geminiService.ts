@@ -200,6 +200,53 @@ export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:
   }
 };
 
+export const generateVeoImageToVideo = async (prompt: string, imageBase64: string): Promise<string> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    console.log("Starting Veo Image-to-Video generation");
+  
+    // Dynamically detect MIME type from base64 string
+    const match = imageBase64.match(/^data:(.+);base64,(.+)$/);
+    const mimeType = match ? match[1] : 'image/png'; // Default
+    const imageBytes = match ? match[2] : (imageBase64.split(',')[1] || imageBase64);
+  
+    try {
+      // veo-3.1-fast-generate-preview allows starting image
+      let operation = await ai.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: prompt || "Animate this image", // Prompt is optional but helpful
+        image: {
+            imageBytes: imageBytes,
+            mimeType: mimeType
+        },
+        config: {
+          numberOfVideos: 1,
+          resolution: '720p',
+          aspectRatio: '16:9' // Usually output ratio must match or be standard. Veo fast supports 16:9 or 9:16.
+        }
+      });
+  
+      console.log("Veo Image-to-Video operation started:", operation);
+  
+      while (!operation.done) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        operation = await ai.operations.getVideosOperation({operation: operation});
+      }
+  
+      const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+      if (!videoUri) {
+          throw new Error("No video URI returned from Veo Image-to-Video");
+      }
+  
+      return `${videoUri}&key=${process.env.API_KEY}`;
+    } catch (error: any) {
+      if (error.status === 429 || error.message?.includes('RESOURCE_EXHAUSTED')) {
+          throw new Error("Daily AI quota exceeded. Please try again later or check your billing.");
+       }
+       throw error;
+    }
+  };
+
 export const generateVeoProductVideo = async (prompt: string, imagesBase64: string[]): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   

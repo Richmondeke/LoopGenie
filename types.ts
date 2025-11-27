@@ -38,7 +38,7 @@ export interface Template {
   variables: TemplateVariable[];
   defaultAvatarId?: string;
   defaultVoiceId?: string;
-  mode?: 'AVATAR' | 'COMPOSITION' | 'SHORTS' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'AUDIOBOOK'; // Distinguish editor modes
+  mode?: 'AVATAR' | 'COMPOSITION' | 'SHORTS' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'AUDIOBOOK' | 'IMAGE_TO_VIDEO'; // Distinguish editor modes
 }
 
 export interface Project {
@@ -50,7 +50,7 @@ export interface Project {
   createdAt: number;
   videoUrl?: string; // This can also store Audio URL for audiobooks
   error?: string;
-  type?: 'AVATAR' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'COMPOSITION' | 'SHORTS' | 'AUDIOBOOK'; // Track the type of project
+  type?: 'AVATAR' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'COMPOSITION' | 'SHORTS' | 'AUDIOBOOK' | 'IMAGE_TO_VIDEO'; // Track the type of project
   cost?: number; // Cost in credits
 }
 

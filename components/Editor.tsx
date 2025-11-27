@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard, Layers, Settings as SettingsIcon, Type, MousePointer2, Search, X, Headphones, FileAudio } from 'lucide-react';
 import { Template, HeyGenAvatar, HeyGenVoice, CompositionState, CompositionElement, ElementType } from '../types';
-import { generateScriptContent, generateVeoVideo, generateVeoProductVideo, generateSpeech } from '../services/geminiService';
+import { generateScriptContent, generateVeoVideo, generateVeoProductVideo, generateVeoImageToVideo, generateSpeech } from '../services/geminiService';
 import { getAvatars, getVoices } from '../services/heygenService';
 import { searchPexels, readFileAsDataURL, StockAsset } from '../services/mockAssetService';
 import { ShortMakerEditor } from './ShortMakerEditor';
@@ -347,10 +347,23 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
     const [errorMsg, setErrorMsg] = useState('');
     const [voice, setVoice] = useState('Kore'); // Default Gemini voice
     
+    // Preview State
+    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+    const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+    const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+
     // Cost calculation (1 credit per 200 words approx)
     const wordCount = script.trim() ? script.trim().split(/\s+/).length : 0;
     const estimatedCost = Math.max(1, Math.ceil(wordCount / 200));
     const hasSufficientCredits = userCredits >= estimatedCost;
+
+    useEffect(() => {
+        return () => {
+            if (previewAudioRef.current) {
+                previewAudioRef.current.pause();
+            }
+        };
+    }, []);
 
     const handleGenerateScript = async () => {
         if (!topic.trim()) return;
@@ -390,6 +403,41 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
             setErrorMsg(e.message || "Failed to generate audio");
         } finally {
             setIsAudioLoading(false);
+        }
+    };
+
+    const handlePreviewVoice = async () => {
+        if (isPreviewPlaying && previewAudioRef.current) {
+            previewAudioRef.current.pause();
+            setIsPreviewPlaying(false);
+            return;
+        }
+
+        setIsPreviewLoading(true);
+        try {
+            const previewText = `Hello, I am ${voice}. This is a preview of my voice.`;
+            // Re-use generateSpeech but for short text
+            const url = await generateSpeech(previewText, voice);
+            
+            const audio = new Audio(url);
+            previewAudioRef.current = audio;
+            
+            audio.onended = () => {
+                setIsPreviewPlaying(false);
+            };
+            
+            audio.onerror = (e) => {
+                console.error("Audio playback error", e);
+                setIsPreviewPlaying(false);
+            };
+
+            await audio.play();
+            setIsPreviewPlaying(true);
+        } catch (e) {
+            console.error("Preview generation failed", e);
+            // We usually don't block main UI for preview failures, just log it
+        } finally {
+            setIsPreviewLoading(false);
         }
     };
 
@@ -459,15 +507,27 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
                     <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex-1 flex flex-col">
                         <div className="mb-6">
                             <label className="block text-sm font-bold text-gray-700 mb-2">Voice Selection</label>
-                            <select 
-                                value={voice}
-                                onChange={(e) => setVoice(e.target.value)}
-                                className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-white"
-                            >
-                                <option value="Kore">Kore (Female, Calm)</option>
-                                <option value="Puck">Puck (Male, Energetic)</option>
-                                <option value="Fenrir">Fenrir (Male, Deep)</option>
-                            </select>
+                            <div className="flex gap-2">
+                                <select 
+                                    value={voice}
+                                    onChange={(e) => setVoice(e.target.value)}
+                                    className="flex-1 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-white"
+                                >
+                                    <option value="Kore">Kore (Female, Calm)</option>
+                                    <option value="Puck">Puck (Male, Energetic)</option>
+                                    <option value="Fenrir">Fenrir (Male, Deep)</option>
+                                    <option value="Charon">Charon (Male, Authoritative)</option>
+                                    <option value="Zephyr">Zephyr (Female, Gentle)</option>
+                                </select>
+                                <button
+                                    onClick={handlePreviewVoice}
+                                    disabled={isPreviewLoading}
+                                    className="w-12 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-xl transition-colors flex items-center justify-center flex-shrink-0"
+                                    title="Preview Voice"
+                                >
+                                     {isPreviewLoading ? <Loader2 size={20} className="animate-spin" /> : isPreviewPlaying ? <Pause size={20} /> : <Play size={20} />}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex-1 bg-gray-50 rounded-xl border border-gray-200 flex flex-col items-center justify-center p-6 mb-6 relative overflow-hidden">
@@ -676,10 +736,15 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
 
                     <button
                         onClick={handleGenerate}
-                        disabled={true}
-                        className="w-full font-medium py-3 rounded-xl transition-all shadow-lg flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed mt-auto bg-gray-700 text-gray-500 border border-gray-600"
+                        disabled={status === 'generating' || images.filter(i => i).length === 0 || !hasSufficientCredits}
+                        className={`w-full font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg mt-auto ${
+                            status === 'generating' || images.filter(i => i).length === 0 || !hasSufficientCredits
+                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-teal-600 hover:bg-teal-500 text-white hover:shadow-teal-500/20'
+                        }`}
                     >
-                        <span className="text-sm font-bold">Coming Soon</span>
+                        {status === 'generating' ? <Loader2 className="animate-spin" /> : <Video size={20} />}
+                        <span>{status === 'generating' ? 'Generating...' : `Generate Video (${COST} Credit)`}</span>
                     </button>
                     {errorMsg && <div className="text-red-400 text-xs text-center">{errorMsg}</div>}
                 </div>
@@ -816,10 +881,15 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
 
                     <button
                         onClick={handleGenerate}
-                        disabled={true}
-                        className="w-full font-medium py-3 rounded-xl transition-all shadow-lg flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed mt-6 bg-gray-700 text-gray-500 border border-gray-600"
+                        disabled={status === 'generating' || !prompt || !hasSufficientCredits}
+                        className={`w-full font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg mt-6 ${
+                            status === 'generating' || !prompt || !hasSufficientCredits
+                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white hover:shadow-purple-500/20'
+                        }`}
                     >
-                        <span className="text-sm font-bold">Coming Soon</span>
+                        {status === 'generating' ? <Loader2 className="animate-spin" /> : <Clapperboard size={20} />}
+                        <span>{status === 'generating' ? 'Generating...' : `Generate Video (${COST} Credit)`}</span>
                     </button>
                     {errorMsg && <div className="text-red-400 text-xs text-center">{errorMsg}</div>}
                 </div>
@@ -857,6 +927,171 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
         </div>
     );
 };
+
+// ==========================================
+// 9. Image To Video Editor
+// ==========================================
+
+const ImageToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => {
+    const [image, setImage] = useState<string | null>(null);
+    const [prompt, setPrompt] = useState('');
+    const [status, setStatus] = useState<'idle' | 'generating' | 'completed' | 'error'>('idle');
+    const [videoUri, setVideoUri] = useState<string | null>(null);
+    const [errorMsg, setErrorMsg] = useState('');
+    const COST = 1;
+    const hasSufficientCredits = userCredits >= COST;
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleGenerate = async () => {
+        if (!image) {
+            setErrorMsg("Please upload an image.");
+            return;
+        }
+        if (!hasSufficientCredits) {
+            setErrorMsg("Insufficient credits.");
+            return;
+        }
+
+        setStatus('generating');
+        setErrorMsg('');
+        setVideoUri(null);
+
+        try {
+            if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+                const has = await window.aistudio.hasSelectedApiKey();
+                if (!has) await window.aistudio.openSelectKey();
+            }
+
+            const uri = await generateVeoImageToVideo(prompt, image);
+            setVideoUri(uri);
+            setStatus('completed');
+        } catch (error: any) {
+            console.error(error);
+            setStatus('error');
+            setErrorMsg(error.message || "Failed to generate video.");
+        }
+    };
+
+    const handleSaveProject = () => {
+        if (status === 'completed' && videoUri) {
+             onGenerate({
+                 isDirectSave: true,
+                 videoUrl: videoUri,
+                 thumbnailUrl: image, 
+                 cost: COST,
+                 type: 'IMAGE_TO_VIDEO'
+             });
+        }
+    };
+
+    return (
+        <div className="h-full bg-black text-white p-4 lg:p-8 overflow-y-auto rounded-xl">
+             <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto h-full">
+                <div className="w-full lg:w-[400px] flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col gap-6">
+                    <div>
+                        <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
+                            <ImageIcon size={20} className="text-sky-400" />
+                            Image to Video
+                        </h2>
+                        <p className="text-gray-400 text-xs">Animate a still image using Veo 3.1</p>
+                    </div>
+
+                    <div className="flex-1 flex flex-col gap-4">
+                        <label className="text-sm font-medium block text-gray-300">Source Image</label>
+                        <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-800 border border-gray-700 hover:border-sky-500 transition-colors group">
+                            {image ? (
+                                <>
+                                    <img src={image} alt="Source" className="w-full h-full object-cover" />
+                                    <button 
+                                        onClick={() => setImage(null)}
+                                        className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </>
+                            ) : (
+                                <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer text-gray-500 hover:text-gray-300">
+                                    <Upload size={32} className="mb-2" />
+                                    <span className="text-xs font-medium">Click to upload image</span>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                                </label>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="text-sm font-medium mb-2 block text-gray-300">Motion Prompt (Optional)</label>
+                            <textarea
+                                value={prompt}
+                                onChange={(e) => setPrompt(e.target.value)}
+                                placeholder="Describe the motion e.g., 'The water flows gently', 'Camera pans right'..."
+                                className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-sm text-white placeholder-gray-500 focus:ring-1 focus:ring-sky-500 outline-none h-32 resize-none leading-relaxed"
+                            />
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleGenerate}
+                        disabled={status === 'generating' || !image || !hasSufficientCredits}
+                        className={`w-full font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg ${
+                            status === 'generating' || !image || !hasSufficientCredits
+                            ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                            : 'bg-sky-600 hover:bg-sky-500 text-white hover:shadow-sky-500/20'
+                        }`}
+                    >
+                        {status === 'generating' ? (
+                            <Loader2 className="animate-spin" />
+                        ) : (
+                            <Video size={20} />
+                        )}
+                        <span>{status === 'generating' ? 'Generating...' : `Generate Video (${COST} Credit)`}</span>
+                    </button>
+                    {errorMsg && <div className="text-red-400 text-xs text-center">{errorMsg}</div>}
+                </div>
+
+                <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl p-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-gray-200 font-medium">Output Preview</h2>
+                        {status === 'completed' && (
+                             <button 
+                                onClick={handleSaveProject}
+                                className="flex items-center gap-2 px-4 py-1.5 bg-green-700 text-white rounded-lg text-sm font-bold hover:bg-green-600 transition-colors animate-pulse"
+                             >
+                                <Save size={16} /> Save to Projects
+                             </button>
+                        )}
+                    </div>
+                    
+                    <div className="flex-1 bg-black rounded-xl overflow-hidden relative flex items-center justify-center border border-gray-800">
+                        {status === 'completed' && videoUri ? (
+                            <video src={videoUri} controls autoPlay loop className="w-full h-full object-contain" />
+                        ) : status === 'generating' ? (
+                            <div className="text-center">
+                                <Loader2 className="animate-spin text-sky-500 w-12 h-12 mb-4 mx-auto" />
+                                <p className="text-gray-500 font-medium">Animating your image...</p>
+                            </div>
+                        ) : (
+                            <div className="text-gray-600 flex flex-col items-center">
+                                <Film size={48} className="mb-2 opacity-20" />
+                                <p>Preview area</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+             </div>
+        </div>
+    );
+};
+
 
 // ==========================================
 // 6. Composition Editor (Full CapCut Style)
@@ -1386,6 +1621,8 @@ export const Editor: React.FC<EditorProps> = (props) => {
         content = <ShortMakerEditor {...props} />;
     } else if (template.mode === 'AUDIOBOOK') {
         content = <AudiobookEditor {...props} />;
+    } else if (template.mode === 'IMAGE_TO_VIDEO') {
+        content = <ImageToVideoEditor {...props} />;
     } else {
         content = <AvatarEditor {...props} />;
     }
