@@ -1,12 +1,20 @@
-
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScriptGenerationRequest } from "../types";
+
+// Helper to get API Key from env or local storage
+const getApiKey = () => {
+    // Priority: Local Storage (User Setting) -> Process Env (Deployment)
+    const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+    if (!key) {
+        throw new Error("API Key must be set. Please configure your Google Gemini API Key in Settings.");
+    }
+    return key;
+};
 
 export const generateScriptContent = async (
   request: ScriptGenerationRequest
 ): Promise<Record<string, string>> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
   // For avatar videos, we really only care about the 'script' variable.
   const schema = {
@@ -108,7 +116,7 @@ function createWavHeader(pcmDataLength: number, sampleRate: number = 24000, numC
 }
 
 export const generateSpeech = async (text: string, voiceName: string = 'Kore'): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
   try {
     const response = await ai.models.generateContent({
@@ -159,8 +167,8 @@ export const generateSpeech = async (text: string, voiceName: string = 'Kore'): 
 };
 
 export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:16' = '16:9'): Promise<string> => {
-  // Always create a new instance to pick up the latest selected key
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   
   console.log("Starting Veo generation for:", prompt, aspectRatio);
 
@@ -191,7 +199,7 @@ export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:
     }
 
     // The URI needs the API key appended to be downloadable/playable
-    return `${videoUri}&key=${process.env.API_KEY}`;
+    return `${videoUri}&key=${apiKey}`;
   } catch (error: any) {
      if (error.status === 429 || error.message?.includes('RESOURCE_EXHAUSTED')) {
         throw new Error("Daily AI quota exceeded. Please try again later or check your billing.");
@@ -201,7 +209,8 @@ export const generateVeoVideo = async (prompt: string, aspectRatio: '16:9' | '9:
 };
 
 export const generateVeoImageToVideo = async (prompt: string, imageBase64: string): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
     
     console.log("Starting Veo Image-to-Video generation");
   
@@ -238,7 +247,7 @@ export const generateVeoImageToVideo = async (prompt: string, imageBase64: strin
           throw new Error("No video URI returned from Veo Image-to-Video");
       }
   
-      return `${videoUri}&key=${process.env.API_KEY}`;
+      return `${videoUri}&key=${apiKey}`;
     } catch (error: any) {
       if (error.status === 429 || error.message?.includes('RESOURCE_EXHAUSTED')) {
           throw new Error("Daily AI quota exceeded. Please try again later or check your billing.");
@@ -248,7 +257,8 @@ export const generateVeoImageToVideo = async (prompt: string, imageBase64: strin
   };
 
 export const generateVeoProductVideo = async (prompt: string, imagesBase64: string[]): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  const ai = new GoogleGenAI({ apiKey });
   
   console.log("Starting Veo Product Video generation with", imagesBase64.length, "images");
 
@@ -297,7 +307,7 @@ export const generateVeoProductVideo = async (prompt: string, imagesBase64: stri
         throw new Error("No video URI returned from Veo Product Generation");
     }
 
-    return `${videoUri}&key=${process.env.API_KEY}`;
+    return `${videoUri}&key=${apiKey}`;
   } catch (error: any) {
     if (error.status === 429 || error.message?.includes('RESOURCE_EXHAUSTED')) {
         throw new Error("Daily AI quota exceeded. Please try again later or check your billing.");

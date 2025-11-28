@@ -4,6 +4,16 @@ import { stitchVideoFrames } from "./ffmpegService";
 import { generatePollinationsImage } from "./pollinationsService";
 import { generateSpeech } from "./geminiService";
 
+// Helper to get API Key from env or local storage
+const getApiKey = () => {
+    // Priority: Local Storage (User Setting) -> Process Env (Deployment)
+    const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+    if (!key) {
+        throw new Error("API Key must be set. Please configure your Google Gemini API Key in Settings.");
+    }
+    return key;
+};
+
 // ==========================================
 // 1. GENERATE STORY (Gemini Text)
 // ==========================================
@@ -31,7 +41,7 @@ const withTimeout = <T>(promise: Promise<T>, ms: number, errorMsg: string): Prom
 };
 
 export const generateStory = async (req: GenerateStoryRequest): Promise<ShortMakerManifest> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: getApiKey() });
   
   // 1. Determine constraints based on user input
   const durationMap: Record<string, number> = {

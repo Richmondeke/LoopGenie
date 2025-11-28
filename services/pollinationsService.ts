@@ -10,7 +10,7 @@ export const generatePollinationsImage = async (prompt: string, width: number, h
         // We fetch the image to convert it to a Base64 Data URI.
         // This ensures consistent handling in the frontend (Editor preview) and FFMPEG service.
         const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 15000); // 15s timeout for image
+        const id = setTimeout(() => controller.abort(), 60000); // Increased to 60s timeout
 
         const response = await fetch(url, { signal: controller.signal });
         clearTimeout(id);

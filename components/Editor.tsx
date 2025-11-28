@@ -1,17 +1,17 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowLeft, Sparkles, Video, Loader2, Wand2, Upload, Plus, Film, Image as ImageIcon, Music, Trash2, Youtube, Play, Pause, AlertCircle, ShoppingBag, Volume2, Maximize, MoreVertical, PenTool, Zap, Download, Save, Coins, Clapperboard, Layers, Settings as SettingsIcon, Type, MousePointer2, Search, X, Headphones, FileAudio, BookOpen, RectangleHorizontal, RectangleVertical } from 'lucide-react';
-import { Template, HeyGenAvatar, HeyGenVoice, CompositionState, CompositionElement, ElementType } from '../types';
+import { Template, HeyGenAvatar, HeyGenVoice, CompositionState, CompositionElement, ElementType, ProjectStatus } from '../types';
 import { generateScriptContent, generateVeoVideo, generateVeoProductVideo, generateVeoImageToVideo, generateSpeech } from '../services/geminiService';
-import { getAvatars, getVoices } from '../services/heygenService';
+import { getAvatars, getVoices, generateVideo, checkVideoStatus } from '../services/heygenService';
 import { searchPexels, readFileAsDataURL, StockAsset } from '../services/mockAssetService';
 import { ShortMakerEditor } from './ShortMakerEditor';
-import { stitchVideoFrames } from '../services/ffmpegService';
+import { stitchVideoFrames, cropVideo } from '../services/ffmpegService';
 
 interface EditorProps {
   template: Template;
   onBack: () => void;
-  onGenerate: (data: any) => void;
+  onGenerate: (data: any) => Promise<void> | void; // Allow promise return
   isGenerating: boolean;
   heyGenKey?: string;
   userCredits: number;
@@ -33,7 +33,8 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
 
     // Resource Loading State
     const [isLoadingResources, setIsLoadingResources] = useState(true);
-    const [isStaticGenerating, setIsStaticGenerating] = useState(false);
+    const [isLocalGenerating, setIsLocalGenerating] = useState(false);
+    const [generationStatus, setGenerationStatus] = useState<string>('');
     
     // AI State
     const [aiPrompt, setAiPrompt] = useState('');
@@ -161,27 +162,28 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
     };
 
     const triggerGenerate = async () => {
-        if (!hasSufficientCredits) return;
+        if (!hasSufficientCredits || !currentAvatar) return;
+        
+        setIsLocalGenerating(true);
+        setGenerationStatus("Starting generation...");
 
-        // STATIC MODE: Generate client-side using FFmpeg/Canvas
-        if (generationMode === 'STATIC') {
-             if (!currentAvatar) return;
-             setIsStaticGenerating(true);
-             try {
-                // 1. Generate Audio
-                // Use Gemini TTS as fallback or primary for this mode
+        const targetW = aspectRatio === '9:16' ? 1080 : 1920;
+        const targetH = aspectRatio === '9:16' ? 1920 : 1080;
+
+        try {
+            // STATIC MODE: Generate client-side using FFmpeg/Canvas (Simulated)
+            if (generationMode === 'STATIC') {
+                setGenerationStatus("Synthesizing Audio...");
                 const voiceName = currentAvatar.gender === 'female' ? 'Kore' : 'Fenrir';
                 const audioUrl = await generateSpeech(script, voiceName);
 
-                // 2. Stitch using FFmpeg Service (Canvas)
+                setGenerationStatus("Stitching & Cropping Video...");
                 // Pass target dimensions for cropping
-                const w = aspectRatio === '9:16' ? 1080 : 1920;
-                const h = aspectRatio === '9:16' ? 1920 : 1080;
-                
-                const videoUrl = await stitchVideoFrames([currentAvatar.previewUrl], audioUrl, 5000, w, h);
+                const videoUrl = await stitchVideoFrames([currentAvatar.previewUrl], audioUrl, 5000, targetW, targetH);
 
-                // 3. Save as project
-                onGenerate({
+                setGenerationStatus("Saving Project...");
+                // Save - We await this to ensure we catch errors here and don't close loading prematurely
+                await onGenerate({
                     isDirectSave: true,
                     videoUrl: videoUrl,
                     thumbnailUrl: currentAvatar.previewUrl,
@@ -190,27 +192,73 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
                     templateName: `${currentAvatar.name} (Static)`,
                     shouldRedirect: true
                 });
+            } 
+            // HEYGEN MODE: API Call -> Poll -> Crop -> Save
+            else {
+                if (!heyGenKey) throw new Error("HeyGen API Key is missing.");
+                
+                setGenerationStatus("Sending request to HeyGen...");
+                
+                // 1. Start Job
+                // We ask HeyGen for high-res but we will crop it ourselves anyway to be sure
+                const jobId = await generateVideo(
+                    heyGenKey,
+                    template.id, 
+                    { script }, 
+                    selectedAvatar, 
+                    selectedVoice, 
+                    { width: targetW, height: targetH }
+                );
 
-             } catch (error) {
-                 console.error(error);
-                 alert("Failed to generate static video");
-             } finally {
-                 setIsStaticGenerating(false);
-             }
-        } 
-        // HEYGEN MODE: Standard API Call
-        else {
-             const w = aspectRatio === '9:16' ? 1080 : 1920;
-             const h = aspectRatio === '9:16' ? 1920 : 1080;
+                // 2. Poll for completion
+                setGenerationStatus("Waiting for HeyGen to render (this may take a minute)...");
+                let videoUrl = null;
+                let attempts = 0;
+                
+                while (!videoUrl && attempts < 60) { // Timeout after ~5 mins
+                    await new Promise(r => setTimeout(r, 5000));
+                    const status = await checkVideoStatus(heyGenKey, jobId);
+                    
+                    if (status.status === ProjectStatus.COMPLETED && status.videoUrl) {
+                        videoUrl = status.videoUrl;
+                    } else if (status.status === ProjectStatus.FAILED) {
+                        throw new Error(status.error || "HeyGen generation failed.");
+                    }
+                    attempts++;
+                    setGenerationStatus(`Rendering... (${attempts * 5}s elapsed)`);
+                }
 
-             onGenerate({ 
-                 variables: { script }, 
-                 avatarId: selectedAvatar, 
-                 voiceId: selectedVoice, 
-                 cost: estimatedCost,
-                 // Pass dimensions so heygenService can include them
-                 dimension: { width: w, height: h }
-             });
+                if (!videoUrl) throw new Error("Timed out waiting for HeyGen.");
+
+                // 3. Post-Process Crop
+                setGenerationStatus("Finalizing Crop (Client-Side)...");
+                // We pass the remote URL to our local cropper
+                // Note: This relies on the remote URL supporting CORS (crossOrigin anonymous)
+                const croppedUrl = await cropVideo(videoUrl, targetW, targetH);
+
+                // 4. Save
+                setGenerationStatus("Saving Project...");
+                await onGenerate({ 
+                    isDirectSave: true,
+                    videoUrl: croppedUrl,
+                    thumbnailUrl: currentAvatar.previewUrl,
+                    cost: estimatedCost,
+                    type: 'AVATAR',
+                    templateName: `${currentAvatar.name} (Lip-Sync)`,
+                    shouldRedirect: true
+                });
+            }
+
+        } catch (error: any) {
+             console.error(error);
+             alert(`Generation Failed: ${error.message}`);
+             // Note: In a real app, we'd trigger a refund here if credits were deducted
+        } finally {
+             // Only clear loading state if we are still mounted/didn't redirect successfully in a way that unmounts
+             // But actually, we want to clear it so the UI resets if error occurred.
+             // If successful redirect happened, this component is unmounted, so state update is no-op/warn
+             setIsLocalGenerating(false);
+             setGenerationStatus("");
         }
     };
   
@@ -224,7 +272,19 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
     }
 
     return (
-      <div className="h-full flex flex-col lg:flex-row gap-8 overflow-hidden">
+      <div className="h-full flex flex-col lg:flex-row gap-8 overflow-hidden relative">
+        {/* Blocking Overlay for Generation */}
+        {isLocalGenerating && (
+            <div className="absolute inset-0 z-50 bg-white/90 backdrop-blur-sm flex flex-col items-center justify-center">
+                <div className="bg-white p-8 rounded-2xl shadow-2xl border border-gray-100 flex flex-col items-center text-center max-w-sm">
+                    <Loader2 className="animate-spin text-indigo-600 mb-4" size={48} />
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">Generating Video</h3>
+                    <p className="text-gray-600 font-medium animate-pulse">{generationStatus}</p>
+                    <p className="text-xs text-gray-400 mt-4">Please do not close this tab.</p>
+                </div>
+            </div>
+        )}
+
         <div className="flex-1 flex flex-col h-full overflow-y-auto pr-2 pb-20 space-y-8 no-scrollbar">
             {/* AI Script Section */}
             <div className="space-y-4">
@@ -403,7 +463,7 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
                     </div>
                     <p className="text-[10px] text-gray-500 mt-2 text-center">
                         {generationMode === 'HEYGEN' 
-                            ? "Premium quality with full lip-sync via HeyGen." 
+                            ? "Premium quality via HeyGen. Cropped client-side for perfect fit." 
                             : "Static image with voiceover. Fast & cropped via FFmpeg."}
                     </p>
                  </div>
@@ -412,14 +472,14 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
           
           <button
               onClick={triggerGenerate}
-              disabled={isGenerating || isStaticGenerating || !script.trim() || !hasSufficientCredits}
+              disabled={isGenerating || isLocalGenerating || !script.trim() || !hasSufficientCredits}
               className={`w-full font-bold text-xl py-5 px-6 rounded-2xl flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all transform ${
                 !hasSufficientCredits 
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                   : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700'
               }`}
           >
-              {isGenerating || isStaticGenerating ? (
+              {isGenerating || isLocalGenerating ? (
                   <Loader2 className="animate-spin" size={28} />
               ) : !hasSufficientCredits ? (
                   <div className="flex flex-col items-center leading-tight">
@@ -442,7 +502,7 @@ const AvatarEditor: React.FC<EditorProps> = ({ template, onGenerate, isGeneratin
 // 8. Audiobook Editor (Rest of file unchanged)
 // ==========================================
 const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => {
-// ... existing code ...
+    // ... [Previous Audiobook code retained unchanged] ...
     const [topic, setTopic] = useState('');
     const [script, setScript] = useState('');
     const [isScriptLoading, setIsScriptLoading] = useState(false);
@@ -507,7 +567,7 @@ const AudiobookEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) => 
             setAudioUrl(url);
             
             // Auto Save
-            onGenerate({
+            await onGenerate({
                 isDirectSave: true,
                 videoUrl: url,
                 thumbnailUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=400&q=80',
@@ -745,7 +805,7 @@ const ProductUGCEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =>
             setStatus('completed');
             
             // Auto Save
-            onGenerate({
+            await onGenerate({
                  isDirectSave: true,
                  videoUrl: uri,
                  thumbnailUrl: images.find(i => i !== null) || null,
@@ -926,7 +986,7 @@ const TextToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) =
             setStatus('completed');
             
             // Auto Save
-            onGenerate({
+            await onGenerate({
                  isDirectSave: true,
                  videoUrl: uri,
                  thumbnailUrl: null, 
@@ -1083,7 +1143,7 @@ const ImageToVideoEditor: React.FC<EditorProps> = ({ onGenerate, userCredits }) 
             setStatus('completed');
             
             // Auto Save
-            onGenerate({
+            await onGenerate({
                  isDirectSave: true,
                  videoUrl: uri,
                  thumbnailUrl: image, 

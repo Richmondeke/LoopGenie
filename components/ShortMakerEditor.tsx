@@ -110,24 +110,37 @@ export const ShortMakerEditor: React.FC<ShortMakerEditorProps> = ({ onBack, onGe
             for (let i = 0; i < workingScenes.length; i++) {
                 addLog(`Painting Scene ${i + 1}: "${workingScenes[i].visual_description.substring(0, 30)}..."`);
                 
-                try {
-                    const url = await generateSceneImage(
-                        workingScenes[i],
-                        generationSeed,
-                        style,
-                        aspectRatio // Pass selected AR
-                    );
-                    
-                    workingScenes[i].generated_image_url = url;
-                    
-                    // Update State to trigger re-render of grid
-                    setManifest({ ...storyManifest, scenes: [...workingScenes] });
-                    setCompletedImages(prev => prev + 1);
-                    
-                } catch (err) {
-                    console.error(`Failed to gen image for scene ${i}`, err);
-                    addLog(`❌ Failed to generate image for Scene ${i+1}`);
-                    // We continue even if one image fails (it will be black/blank in video)
+                let url = '';
+                let attempts = 0;
+                
+                // Retry loop for robustness
+                while (!url && attempts < 3) {
+                    try {
+                        url = await generateSceneImage(
+                            workingScenes[i],
+                            generationSeed,
+                            style,
+                            aspectRatio // Pass selected AR
+                        );
+                        
+                        workingScenes[i].generated_image_url = url;
+                        
+                        // Update State to trigger re-render of grid
+                        setManifest({ ...storyManifest, scenes: [...workingScenes] });
+                        setCompletedImages(prev => prev + 1);
+                        
+                    } catch (err) {
+                        attempts++;
+                        console.warn(`Failed to gen image for scene ${i} (Attempt ${attempts}/3)`, err);
+                        
+                        if (attempts < 3) {
+                            addLog(`⚠️ Retrying Scene ${i+1}...`);
+                            await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
+                        } else {
+                            addLog(`❌ Failed to generate image for Scene ${i+1} after 3 attempts.`);
+                            // We continue even if one image fails (it will be black/blank in video)
+                        }
+                    }
                 }
             }
             addLog("✅ Visuals generated.");

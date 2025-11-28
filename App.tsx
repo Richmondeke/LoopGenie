@@ -219,6 +219,7 @@ const App: React.FC = () => {
         setProjects(prev => [newProject, ...prev]);
         
         if (data.shouldRedirect !== false) {
+             console.log("Navigating to projects queue...");
              setSelectedTemplate(null);
              setCurrentView(AppView.PROJECTS);
         }
@@ -256,6 +257,8 @@ const App: React.FC = () => {
   };
 
   const renderContent = () => {
+    // If we have a selected template AND the current view is TEMPLATES, show editor.
+    // This ensures that switching currentView to PROJECTS will unmount the editor.
     if (selectedTemplate && currentView === AppView.TEMPLATES) {
         return (
             <Editor 
@@ -317,7 +320,10 @@ const App: React.FC = () => {
         currentView={currentView} 
         onChangeView={(view) => {
             setCurrentView(view);
-            setSelectedTemplate(null);
+            // If we navigate away from Templates, clear selection to ensure Editor unmounts
+            if (view !== AppView.TEMPLATES) {
+                setSelectedTemplate(null);
+            }
             setIsMobileMenuOpen(false);
             setGalleryInitialView('DASHBOARD');
         }}
