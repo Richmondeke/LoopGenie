@@ -1,14 +1,32 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { ScriptGenerationRequest } from "../types";
+import { GEMINI_API_KEYS } from "../constants";
 
-// Helper to get API Key from env or local storage
-const getApiKey = () => {
-    // Priority: Local Storage (User Setting) -> Process Env (Deployment)
-    const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
-    if (!key) {
-        throw new Error("API Key must be set. Please configure your Google Gemini API Key in Settings.");
+// Helper to get API Key from env, local storage, or rotation pool
+export const getApiKey = () => {
+    // 1. Priority: Local Storage (User Setting / BYOK)
+    const localKey = localStorage.getItem('gemini_api_key');
+    if (localKey && localKey.trim().length > 0) {
+        return localKey;
     }
-    return key;
+
+    // 2. Priority: Default Key Pool (Rotation)
+    // Filters out empty strings from env or constants
+    const validKeys = GEMINI_API_KEYS.filter(k => k && k.trim().length > 0);
+    
+    if (validKeys.length > 0) {
+        // Simple random rotation to distribute load
+        return validKeys[Math.floor(Math.random() * validKeys.length)];
+    }
+
+    // 3. Fallback: Check process.env directly if not in array (legacy safety)
+    if (process.env.API_KEY) {
+        return process.env.API_KEY;
+    }
+
+    // If we reach here, no key is available.
+    throw new Error("Google Gemini API Key is missing. Please add your key in Settings to continue.");
 };
 
 export const generateScriptContent = async (

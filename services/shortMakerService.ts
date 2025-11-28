@@ -1,18 +1,9 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { ShortMakerManifest, ShortMakerScene } from "../types";
 import { stitchVideoFrames } from "./ffmpegService";
 import { generatePollinationsImage } from "./pollinationsService";
-import { generateSpeech } from "./geminiService";
-
-// Helper to get API Key from env or local storage
-const getApiKey = () => {
-    // Priority: Local Storage (User Setting) -> Process Env (Deployment)
-    const key = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
-    if (!key) {
-        throw new Error("API Key must be set. Please configure your Google Gemini API Key in Settings.");
-    }
-    return key;
-};
+import { generateSpeech, getApiKey } from "./geminiService";
 
 // ==========================================
 // 1. GENERATE STORY (Gemini Text)

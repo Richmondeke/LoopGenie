@@ -15,11 +15,11 @@ export const stitchVideoFrames = async (
 ): Promise<string> => {
   console.log("Starting client-side video stitching with audio...");
 
-  // Timeout Promise for safety (30 seconds max)
+  // Timeout Promise for safety (60 seconds max for longer stories)
   return new Promise(async (resolve, reject) => {
     const timeoutId = setTimeout(() => {
         reject(new Error("Video generation timed out (MediaRecorder stuck). Try a shorter duration or refresh."));
-    }, 30000);
+    }, 60000);
 
     try {
         // 1. Prepare Canvas
@@ -30,13 +30,21 @@ export const stitchVideoFrames = async (
 
         // Determine size
         // If target dimensions are provided, use them. Otherwise infer from first image.
-        const firstImage = await loadImage(images[0]);
+        // We load the first image to check dimensions if not provided
+        let firstImgDims = { w: 1280, h: 720 };
+        try {
+            const firstImage = await loadImage(images[0]);
+            firstImgDims = { w: firstImage.naturalWidth, h: firstImage.naturalHeight };
+        } catch (e) {
+            console.warn("Could not load first image to determine dims, using default 720p");
+        }
         
-        canvas.width = targetWidth || firstImage.naturalWidth;
-        canvas.height = targetHeight || firstImage.naturalHeight;
+        canvas.width = targetWidth || firstImgDims.w;
+        canvas.height = targetHeight || firstImgDims.h;
         
         // Clear any existing content
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         // 2. Prepare Audio (if exists)
         let audioContext: AudioContext | null = null;
@@ -57,9 +65,11 @@ export const stitchVideoFrames = async (
                 
                 // Recalculate image duration to sync with audio
                 // Total Audio Duration / Number of Images
-                if (audioBuffer.duration && audioBuffer.duration > 0) {
+                if (audioBuffer.duration && audioBuffer.duration > 1) {
                     durationPerImageMs = (audioBuffer.duration * 1000) / images.length;
                     console.log(`Syncing video to audio. Total: ${audioBuffer.duration}s. Per Image: ${durationPerImageMs}ms`);
+                } else {
+                    console.warn("Audio duration too short or invalid, using default duration.");
                 }
 
                 // Create stream destination
@@ -67,6 +77,9 @@ export const stitchVideoFrames = async (
                 sourceNode = audioContext.createBufferSource();
                 sourceNode.buffer = audioBuffer;
                 sourceNode.connect(dest);
+                
+                // Important: also connect to local output to keep the graph "alive" in some browsers
+                // sourceNode.connect(audioContext.destination); // Optional: Mute this if you don't want to hear it while generating
             } catch (e) {
                 console.error("Error preparing audio for stitch:", e);
                 // Continue without audio if error
@@ -87,6 +100,7 @@ export const stitchVideoFrames = async (
         const combinedStream = new MediaStream(combinedTracks);
 
         // Check supported mime types
+        // Prefer codecs that work broadly
         const mimeTypes = [
             'video/webm; codecs=vp9',
             'video/webm; codecs=vp8',
@@ -104,26 +118,32 @@ export const stitchVideoFrames = async (
 
         const recorder = new MediaRecorder(combinedStream, { 
             mimeType, 
-            videoBitsPerSecond: 5000000 // High bitrate
+            videoBitsPerSecond: 2500000 // 2.5 Mbps is sufficient and safer for browser encoding
         });
         
         const chunks: Blob[] = [];
 
         recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) chunks.push(e.data);
+            if (e.data && e.data.size > 0) {
+                chunks.push(e.data);
+            }
         };
 
         recorder.onstop = () => {
             clearTimeout(timeoutId);
             const blob = new Blob(chunks, { type: mimeType });
             const url = URL.createObjectURL(blob);
-            console.log("Stitching complete:", url);
+            console.log(`Stitching complete. Blob size: ${blob.size} bytes`);
+            
             if (sourceNode) { try { sourceNode.stop(); } catch(e) {} }
-            if (audioContext) { audioContext.close(); }
+            if (audioContext) { 
+                try { audioContext.close(); } catch(e) {} 
+            }
             resolve(url);
         };
 
-        recorder.start();
+        // Start recording in chunks of 1 second to ensure ondataavailable fires frequently
+        recorder.start(1000);
         
         // Start Audio Playback into Stream
         if (sourceNode && audioContext) {
@@ -137,7 +157,15 @@ export const stitchVideoFrames = async (
         // 4. Draw Loop
         // We use a simple loop with setTimeout to pace the drawing.
         for (const imgSrc of images) {
-            const img = await loadImage(imgSrc);
+            // Use fallback if image load fails to prevent entire video failure
+            let img: HTMLImageElement;
+            try {
+                img = await loadImage(imgSrc);
+            } catch (err) {
+                console.warn(`Failed to load image for frame, using placeholder.`, err);
+                // Create a placeholder black/text image logic could go here, but for now we skip/use minimal
+                continue; 
+            }
             
             // Calculate Object Cover logic
             const imgRatio = img.naturalWidth / img.naturalHeight;
@@ -172,11 +200,15 @@ export const stitchVideoFrames = async (
             }
         }
 
+        // Slight buffer at the end to ensure last frames are captured
+        await new Promise(r => setTimeout(r, 500));
+
         // Stop recording
         recorder.stop();
 
     } catch (e) {
         clearTimeout(timeoutId);
+        console.error("Stitching Error:", e);
         reject(e);
     }
   });
@@ -225,7 +257,7 @@ export const cropVideo = async (
         const source = audioCtx.createMediaElementSource(video);
         const dest = audioCtx.createMediaStreamDestination();
         source.connect(dest);
-        source.connect(audioCtx.destination); // Also play to speakers (optional, helps debugging)
+        // We don't connect to destination speakers to prevent echo during processing
 
         // Combine tracks
         const combinedTracks = [
@@ -251,7 +283,7 @@ export const cropVideo = async (
 
         const recorder = new MediaRecorder(combinedStream, {
             mimeType,
-            videoBitsPerSecond: 5000000
+            videoBitsPerSecond: 2500000
         });
 
         const chunks: Blob[] = [];
@@ -302,7 +334,7 @@ export const cropVideo = async (
         // Events
         video.onloadedmetadata = () => {
              // Ready to play
-             recorder.start();
+             recorder.start(1000); // Chunked recording
              video.play().catch(e => {
                  clearTimeout(timeoutId);
                  reject(e);
