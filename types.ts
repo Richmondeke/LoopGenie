@@ -1,11 +1,13 @@
 
-
 export enum AppView {
   TEMPLATES = 'TEMPLATES',
   PROJECTS = 'PROJECTS',
   ASSETS = 'ASSETS',
   SETTINGS = 'SETTINGS',
-  HELP = 'HELP'
+  HELP = 'HELP',
+  ADMIN = 'ADMIN',
+  ADMIN_USERS = 'ADMIN_USERS',
+  INTEGRATIONS = 'INTEGRATIONS'
 }
 
 export enum ProjectStatus {
@@ -20,6 +22,9 @@ export interface UserProfile {
   email: string;
   full_name?: string;
   credits_balance: number;
+  isAdmin?: boolean;
+  webhook_url?: string;
+  webhook_method?: string;
 }
 
 export interface TemplateVariable {
@@ -38,7 +43,7 @@ export interface Template {
   variables: TemplateVariable[];
   defaultAvatarId?: string;
   defaultVoiceId?: string;
-  mode?: 'AVATAR' | 'COMPOSITION' | 'SHORTS' | 'STORYBOOK' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'AUDIOBOOK' | 'IMAGE_TO_VIDEO'; // Distinguish editor modes
+  mode?: 'AVATAR' | 'FASHION_SHOOT' | 'SHORTS' | 'STORYBOOK' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'AUDIOBOOK' | 'IMAGE_TO_VIDEO' | 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE';
 }
 
 export interface Project {
@@ -48,10 +53,26 @@ export interface Project {
   thumbnailUrl: string;
   status: ProjectStatus;
   createdAt: number;
-  videoUrl?: string; // This can also store Audio URL for audiobooks
+  videoUrl?: string;
   error?: string;
-  type?: 'AVATAR' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'COMPOSITION' | 'SHORTS' | 'STORYBOOK' | 'AUDIOBOOK' | 'IMAGE_TO_VIDEO'; // Track the type of project
-  cost?: number; // Cost in credits
+  type?: 'AVATAR' | 'UGC_PRODUCT' | 'TEXT_TO_VIDEO' | 'FASHION_SHOOT' | 'SHORTS' | 'STORYBOOK' | 'AUDIOBOOK' | 'IMAGE_TO_VIDEO' | 'TEXT_TO_IMAGE' | 'IMAGE_TO_IMAGE';
+  cost?: number;
+  user_email?: string;
+  metadata?: any; // Stores manifest, scenes, prompts etc.
+}
+
+export interface ClippingProject {
+  id: string;
+  title: string;
+  brand: string;
+  thumbnail: string;
+  reward_pool: string;
+  payout_model: string; // e.g., "$1 per 1k views"
+  category: string;
+  brief: string;
+  requirements: string[];
+  recommended_voice?: string;
+  recommended_style?: string;
 }
 
 export interface HeyGenAvatar {
@@ -66,7 +87,7 @@ export interface HeyGenVoice {
   name: string;
   language: string;
   gender: 'male' | 'female';
-  previewAudio?: string; // URL to audio sample
+  previewAudio?: string;
 }
 
 export interface ScriptGenerationRequest {
@@ -75,53 +96,18 @@ export interface ScriptGenerationRequest {
   templateVariables: TemplateVariable[];
 }
 
-// --- Composition Editor Types ---
-
-export type ElementType = 'text' | 'image' | 'video' | 'audio' | 'shape';
-
-export interface CompositionElement {
-  id: string;
-  type: ElementType;
-  name: string;
-  track: number; // Vertical stacking order (1 is bottom)
-  startTime: number; // Seconds
-  duration: number; // Seconds
-  
-  // Visual Properties (Percentages 0-100 for responsiveness)
-  x: number; 
-  y: number;
-  width: number;
-  height: number;
-  rotation?: number;
-  opacity?: number;
-  
-  // Content
-  text?: string;
-  src?: string; // For image/video/audio
-  
-  // Style
-  fillColor?: string;
-  fontFamily?: string;
-  fontSize?: number;
-  fontWeight?: string;
-  textAlign?: 'left' | 'center' | 'right';
-  zIndex?: number;
-}
-
-export interface CompositionState {
-  name: string;
-  width: number;
-  height: number;
-  duration: number;
-  elements: CompositionElement[];
-}
-
 // --- ShortMaker Types ---
 
 export interface ShortMakerOutputSettings {
-  video_resolution: "1080x1920" | "1920x1080";
+  video_resolution: string;
   fps: number;
   scene_duration_default: number;
+  visual_source?: 'AI' | 'PEXELS';
+  animation?: 'ZOOM' | 'PAN' | 'STATIC';
+  captions?: {
+    enabled: boolean;
+    style: 'BOXED' | 'OUTLINE' | 'MINIMAL' | 'HIGHLIGHT';
+  };
 }
 
 export interface ShortMakerVoiceInstruction {
@@ -146,9 +132,11 @@ export interface ShortMakerScene {
   image_prompt: string;
   transition_to_next: string;
   timecodes: ShortMakerTimecodes;
-  // Generated Assets
   generated_image_url?: string;
   generated_image_seed?: string;
+  generated_audio_url?: string;
+  generated_video_url?: string;
+  media_type?: 'image' | 'video';
 }
 
 export interface ShortMakerManifest {
@@ -160,16 +148,39 @@ export interface ShortMakerManifest {
   voice_instruction: ShortMakerVoiceInstruction;
   output_settings: ShortMakerOutputSettings;
   scenes: ShortMakerScene[];
-  // Generated Assets
   generated_audio_url?: string;
   generated_video_url?: string;
   status?: "created" | "story_ready" | "images_processing" | "audio_processing" | "assembling" | "completed" | "failed";
 }
 
-// Interface for the AI Studio key selection global
-declare global {
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
+// --- Social Integration Types ---
+export interface ScheduledPost {
+  id: string;
+  content: string;
+  platform: 'twitter' | 'linkedin' | 'instagram' | 'webhook';
+  scheduledAt: number; // Timestamp
+  status: 'scheduled' | 'posted' | 'failed';
+  mediaUrl?: string;
 }
+
+export interface IntegrationStatus {
+  id: 'twitter' | 'linkedin' | 'instagram' | 'webhook';
+  name: string;
+  connected: boolean;
+  username?: string;
+  avatarUrl?: string;
+}
+
+// --- CENTRALIZED COST CONFIGURATION ---
+// Base assumption: 1 Credit = $0.10 USD
+export const APP_COSTS = {
+  AVATAR_VIDEO: 30,      // Provider: ~$2.00 -> Price: $3.00
+  VEO_FAST: 8,           // Provider: ~$0.50 -> Price: $0.80
+  VEO_PRO: 23,           // Provider: ~$1.50 -> Price: $2.30
+  UGC_MULTI: 24,         // Provider: ~$1.60 -> Price: $2.40
+  FASHION: 2,            // Provider: ~$0.10 -> Price: $0.20
+  AUDIOBOOK: 5,          // Provider: ~$0.30 -> Price: $0.50
+  SHORTS_15S: 5,         // Provider: ~$0.32 -> Price: $0.50
+  SHORTS_30S: 9,         // Provider: ~$0.54 -> Price: $0.90
+  SHORTS_60S: 16         // Provider: ~$1.03 -> Price: $1.60
+};

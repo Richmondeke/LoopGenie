@@ -3,14 +3,12 @@ import { Template, HeyGenAvatar, HeyGenVoice } from './types';
 
 export const DEFAULT_HEYGEN_API_KEY = 'sk_V2_hgu_kBihe5QbIIG_p27AdJG5h2c4nHiPds9jt5OZvLRVFadb';
 
+export const FIREBASE_FUNCTION_URL = 'https://geminiapi-qtufae4a2a-uc.a.run.app';
+
+
 // Default Gemini API Keys pool. 
-// The app will rotate through these if the user hasn't provided their own key.
-// Add your hardcoded keys here as strings if process.env is not available in your deployment.
-export const GEMINI_API_KEYS: string[] = [
-    process.env.API_KEY || "", 
-    // "AIzaSy...YourHardcodedKeyHere...",
-    // "AIzaSy...AnotherKeyHere..."
-];
+// Keys are now managed via Supabase Edge Functions (GEMINI_API Secret) to prevent client-side exposure.
+export const GEMINI_API_KEYS: string[] = [];
 
 // We use these as "Featured Avatars" or fallback if API fails
 export const MOCK_TEMPLATES: Template[] = [

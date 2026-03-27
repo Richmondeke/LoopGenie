@@ -1,34 +1,78 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Loader2, ShoppingBag, Clapperboard, Layers, Sparkles, Headphones, Image as ImageIcon, BookOpen } from 'lucide-react';
-import { Template, HeyGenAvatar } from '../types';
+import { User, Loader2, ShoppingBag, Clapperboard, Sparkles, Headphones, Image as ImageIcon, BookOpen, Camera, Search, ArrowRight, Wand2, Smartphone, Video, Layers, Music, Trophy, Flame, Target, DollarSign, CheckCircle2, X } from 'lucide-react';
+import { Template, HeyGenAvatar, ClippingProject } from '../types';
 import { getAvatars } from '../services/heygenService';
 
 export interface TemplateGalleryProps {
   onSelectTemplate: (template: Template) => void;
   heyGenKey?: string;
   initialView?: 'DASHBOARD' | 'AVATAR_SELECT';
+  userProfile?: any;
+  recentProjects?: any[];
 }
 
 type GalleryView = 'DASHBOARD' | 'AVATAR_SELECT';
 
-export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTemplate, heyGenKey, initialView = 'DASHBOARD' }) => {
+// Mock Clipping Campaigns
+const CLIPPING_PROJECTS: ClippingProject[] = [
+    {
+        id: 'cp_1',
+        title: 'Future Tech Review',
+        brand: 'TechDaily',
+        thumbnail: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=2070&auto=format&fit=crop',
+        reward_pool: '$10,000',
+        payout_model: '$2.00 per 1k views',
+        category: 'Technology',
+        brief: 'Create a 30-second viral short discussing the potential of AI in daily life. Must be upbeat and futuristic.',
+        requirements: ['Use "Cyberpunk" visual style', 'Voice: Puck (Energetic)', 'Mention "AI Revolution" in script'],
+        recommended_voice: 'Puck',
+        recommended_style: 'Cyberpunk'
+    },
+    {
+        id: 'cp_2',
+        title: 'Summer Fashion Haul',
+        brand: 'VogueStyles',
+        thumbnail: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=2070&auto=format&fit=crop',
+        reward_pool: '$5,000',
+        payout_model: '$1.50 per 1k views',
+        category: 'Fashion',
+        brief: 'Showcase trending summer outfits. Focus on bright colors and luxury aesthetics.',
+        requirements: ['Use "Luxury" visual style', 'Voice: Kore (Calm)', 'Format: 9:16 Vertical'],
+        recommended_voice: 'Kore',
+        recommended_style: 'Luxury'
+    },
+    {
+        id: 'cp_3',
+        title: 'Crypto Market Update',
+        brand: 'CoinBase Pro',
+        thumbnail: 'https://images.unsplash.com/photo-1518546305927-5a440bbabb91?q=80&w=2070&auto=format&fit=crop',
+        reward_pool: '$15,000',
+        payout_model: '$3.00 per 1k views',
+        category: 'Finance',
+        brief: 'Explain a recent crypto trend in simple terms. Keep it informative and trustworthy.',
+        requirements: ['Use "Corporate" visual style', 'Voice: Charon (Deep)', 'No financial advice disclaimer'],
+        recommended_voice: 'Charon',
+        recommended_style: 'Corporate'
+    }
+];
+
+export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTemplate, heyGenKey, initialView = 'DASHBOARD', userProfile, recentProjects = [] }) => {
   const [view, setView] = useState<GalleryView>(initialView);
   const [avatars, setAvatars] = useState<HeyGenAvatar[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [genderFilter, setGenderFilter] = useState<'ALL' | 'male' | 'female'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Clipping Project State
+  const [selectedCampaign, setSelectedCampaign] = useState<ClippingProject | null>(null);
 
   useEffect(() => {
-    // Pre-fetch avatars so they are ready when clicking the card
     const fetchRealAvatars = async () => {
-        // If we already have avatars and no key change, don't refetch unless empty
-        // The service layer handles API caching.
         if (!heyGenKey && avatars.length > 0) return;
-        
         setIsLoading(true);
         try {
             const realAvatars = await getAvatars(heyGenKey || '');
-            // Load ALL avatars, do not slice/limit them.
             setAvatars(realAvatars);
         } catch (e) {
             console.error("Failed to load avatars", e);
@@ -41,7 +85,7 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
     if (view === 'AVATAR_SELECT') {
         fetchRealAvatars();
     }
-  }, [heyGenKey, view]); // Trigger fetch when entering AVATAR_SELECT view
+  }, [heyGenKey, view]);
 
   const handleSelectAvatar = (avatar: HeyGenAvatar) => {
       const template: Template = {
@@ -50,281 +94,180 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
           category: 'Avatar',
           thumbnailUrl: avatar.previewUrl,
           defaultAvatarId: avatar.id,
-          variables: [
-              { 
-                  key: 'script', 
-                  label: 'Script', 
-                  type: 'textarea', 
-                  placeholder: `Hi, I'm ${avatar.name}. I can read any text you type here!` 
-              }
-          ],
+          variables: [{ key: 'script', label: 'Script', type: 'textarea', placeholder: `Hi, I'm ${avatar.name}...` }],
           mode: 'AVATAR'
       };
       onSelectTemplate(template);
   };
 
-  const handleSelectProductUGC = () => {
-      onSelectTemplate({
-          id: 'mode_ugc',
-          name: 'UGC Product Video',
-          category: 'AI',
-          thumbnailUrl: '',
-          variables: [],
-          mode: 'UGC_PRODUCT'
-      });
-  };
-
-  const handleSelectTextToVideo = () => {
-      onSelectTemplate({
-          id: 'mode_text_video',
-          name: 'AI Video Generator',
-          category: 'AI',
-          thumbnailUrl: '',
-          variables: [],
-          mode: 'TEXT_TO_VIDEO'
-      });
-  };
-
-  const handleSelectImageToVideo = () => {
-      onSelectTemplate({
-          id: 'mode_image_video',
-          name: 'Image to Video',
-          category: 'AI',
-          thumbnailUrl: '',
-          variables: [],
-          mode: 'IMAGE_TO_VIDEO'
-      });
-  };
-  
-  const handleSelectShortMaker = () => {
-      onSelectTemplate({
-          id: 'mode_shorts',
-          name: 'ShortMaker',
-          category: 'AI',
-          thumbnailUrl: '',
-          variables: [],
+  const handleStartCampaign = (campaign: ClippingProject) => {
+      // Create a template config based on the campaign to pre-fill the editor (conceptually)
+      // In a real app, we'd pass these params to the editor to pre-select dropdowns
+      const template: Template = {
+          id: `campaign_${campaign.id}`,
+          name: `Clip: ${campaign.title}`,
+          category: 'Campaign',
+          thumbnailUrl: campaign.thumbnail,
+          variables: [
+              { key: 'idea', label: 'Idea', type: 'textarea', defaultValue: campaign.brief },
+              { key: 'style', label: 'Style', type: 'text', defaultValue: campaign.recommended_style }
+          ],
           mode: 'SHORTS'
-      });
-  };
-  
-  const handleSelectStorybook = () => {
-      onSelectTemplate({
-          id: 'mode_storybook',
-          name: 'Storybook Video',
-          category: 'AI',
-          thumbnailUrl: '',
-          variables: [],
-          mode: 'STORYBOOK'
-      });
+      };
+      onSelectTemplate(template);
+      setSelectedCampaign(null);
   };
 
-  const handleSelectAudiobook = () => {
-      onSelectTemplate({
-          id: 'mode_audiobook',
-          name: 'Generate Audiobook',
-          category: 'AI',
-          thumbnailUrl: '',
-          variables: [],
-          mode: 'AUDIOBOOK'
-      });
-  };
-
-  // Helper to filter avatars
-  const filteredAvatars = avatars.filter(avatar => {
-      if (genderFilter === 'ALL') return true;
-      return avatar.gender === genderFilter;
-  });
-
-  // Tools Configuration
-  const tools = [
-    // LIVE TOOLS
+  // --- BASIC TOOLS CONFIGURATION ---
+  const BASIC_TOOLS = [
     {
-        id: 'avatar_video',
-        title: 'Avatar Video',
-        description: 'Lifelike avatars with premium lip-sync using HeyGen.',
-        icon: <User size={24} />,
-        colorClass: 'text-indigo-600',
-        bgClass: 'bg-indigo-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=800&q=80',
-        status: 'LIVE',
-        onClick: () => setView('AVATAR_SELECT'),
-        cta: 'Select Avatar'
-    },
-    {
-        id: 'short_maker',
-        title: 'ShortMaker',
-        description: 'Idea to YouTube Short in seconds.',
-        icon: <Sparkles size={24} />,
-        colorClass: 'text-pink-600',
-        bgClass: 'bg-pink-900/20',
-        imgUrl: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=800&q=80',
-        status: 'LIVE',
-        onClick: handleSelectShortMaker,
-        cta: 'Make Short'
-    },
-    {
-        id: 'storybook',
-        title: 'Storybook Video',
-        description: 'Create illustrated stories with narration & visuals.',
-        icon: <BookOpen size={24} />,
-        colorClass: 'text-amber-600',
-        bgClass: 'bg-amber-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1532012197267-da84d127e765?auto=format&fit=crop&w=800&q=80',
-        status: 'LIVE',
-        onClick: handleSelectStorybook,
-        cta: 'Create Story'
-    },
-    {
-        id: 'audiobook',
-        title: 'Generate Audiobook',
-        description: 'Turn any text prompt into high-quality speech.',
+        id: 'audio_gen',
+        title: 'Generate Audio',
+        desc: 'Text to Speech (Audiobook)',
         icon: <Headphones size={24} />,
-        colorClass: 'text-orange-600',
-        bgClass: 'bg-orange-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80',
-        status: 'LIVE',
-        onClick: handleSelectAudiobook,
-        cta: 'Create Audio'
+        color: 'bg-orange-500',
+        bg: 'bg-orange-50 dark:bg-orange-900/10',
+        text: 'text-orange-500',
+        onClick: () => onSelectTemplate({ id: 'audio', name: 'Generate Audio', thumbnailUrl: '', variables: [], mode: 'AUDIOBOOK', category: 'AI' })
     },
-
-    // COMING SOON / BETA TOOLS
     {
-        id: 'ai_video',
-        title: 'AI Video',
-        description: 'Text-to-video using Veo 3.1 model.',
-        icon: <Clapperboard size={24} />,
-        colorClass: 'text-purple-600',
-        bgClass: 'bg-purple-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1618172193763-c511deb635ca?auto=format&fit=crop&w=800&q=80',
-        status: 'COMING SOON',
-        onClick: handleSelectTextToVideo,
-        cta: 'Generate'
+        id: 'text_to_image',
+        title: 'Text to Image',
+        desc: 'Generate AI Images',
+        icon: <Wand2 size={24} />,
+        color: 'bg-pink-500',
+        bg: 'bg-pink-50 dark:bg-pink-900/10',
+        text: 'text-pink-500',
+        onClick: () => onSelectTemplate({ id: 'txt_img', name: 'Text to Image', thumbnailUrl: '', variables: [], mode: 'TEXT_TO_IMAGE', category: 'AI' })
+    },
+    {
+        id: 'image_to_image',
+        title: 'Image to Image',
+        desc: 'Remix & Style Transfer',
+        icon: <Layers size={24} />,
+        color: 'bg-blue-500',
+        bg: 'bg-blue-50 dark:bg-blue-900/10',
+        text: 'text-blue-500',
+        onClick: () => onSelectTemplate({ id: 'img_img', name: 'Image to Image', thumbnailUrl: '', variables: [], mode: 'IMAGE_TO_IMAGE', category: 'AI' })
+    },
+    {
+        id: 'image_to_video',
+        title: 'Image to Video',
+        desc: 'Animate Static Photos',
+        icon: <Video size={24} />,
+        color: 'bg-indigo-500',
+        bg: 'bg-indigo-50 dark:bg-indigo-900/10',
+        text: 'text-indigo-500',
+        onClick: () => onSelectTemplate({ id: 'img_vid', name: 'Image to Video', thumbnailUrl: '', variables: [], mode: 'IMAGE_TO_VIDEO', category: 'AI' })
+    },
+    {
+        id: 'avatar_gen',
+        title: 'Generate Avatar',
+        desc: 'Talking Head Video',
+        icon: <User size={24} />,
+        color: 'bg-purple-500',
+        bg: 'bg-purple-50 dark:bg-purple-900/10',
+        text: 'text-purple-500',
+        onClick: () => setView('AVATAR_SELECT')
+    }
+  ];
+
+  // --- MARKETING TOOLS CONFIGURATION ---
+  const MARKETING_TOOLS = [
+    {
+        id: 'video_storybook',
+        title: 'Video Storybook',
+        desc: 'AI-Generated Stories with Veo 3 Scenes',
+        icon: <BookOpen size={24} />,
+        color: 'bg-blue-600',
+        bg: 'bg-blue-50 dark:bg-blue-900/10',
+        text: 'text-blue-600',
+        isHot: true,
+        onClick: () => onSelectTemplate({ id: 'storybook', name: 'Video Storybook', thumbnailUrl: '', variables: [], mode: 'STORYBOOK', category: 'AI' })
+    },
+    {
+        id: 'shorts_maker',
+        title: 'Shorts Maker',
+        desc: 'Viral Vertical Videos',
+        icon: <Smartphone size={24} />,
+        color: 'bg-rose-500',
+        bg: 'bg-rose-50 dark:bg-rose-900/10',
+        text: 'text-rose-500',
+        onClick: () => onSelectTemplate({ id: 'shorts', name: 'Shorts Maker', thumbnailUrl: '', variables: [], mode: 'SHORTS', category: 'AI' })
+    },
+    {
+        id: 'product_photoshoot',
+        title: 'Product Photoshoot',
+        desc: 'AI Fashion Photography',
+        icon: <Camera size={24} />,
+        color: 'bg-teal-500',
+        bg: 'bg-teal-50 dark:bg-teal-900/10',
+        text: 'text-teal-500',
+        onClick: () => onSelectTemplate({ id: 'fashion', name: 'Product Photoshoot', thumbnailUrl: '', variables: [], mode: 'FASHION_SHOOT', category: 'AI' })
     },
     {
         id: 'product_ugc',
         title: 'Product UGC',
-        description: 'Generate viral UGC product videos using Google Veo.',
+        desc: 'Video Ads from Photos',
         icon: <ShoppingBag size={24} />,
-        colorClass: 'text-teal-600',
-        bgClass: 'bg-teal-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&w=800&q=80',
-        status: 'COMING SOON',
-        onClick: handleSelectProductUGC,
-        cta: 'Create Video'
-    },
-    {
-        id: 'image_video',
-        title: 'Image to Video',
-        description: 'Animate any image using Google Veo.',
-        icon: <ImageIcon size={24} />,
-        colorClass: 'text-sky-600',
-        bgClass: 'bg-sky-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
-        status: 'COMING SOON',
-        onClick: handleSelectImageToVideo,
-        cta: 'Animate'
-    },
-    {
-        id: 'video_editor',
-        title: 'Video Editor',
-        description: 'Professional timeline editor for compositions.',
-        icon: <Layers size={24} />,
-        colorClass: 'text-gray-600',
-        bgClass: 'bg-gray-900/10',
-        imgUrl: 'https://images.unsplash.com/photo-1574717432707-c25c8587a3ea?auto=format&fit=crop&w=800&q=80',
-        status: 'COMING SOON',
-        onClick: () => {}, // No action implemented
-        cta: 'Open Editor'
+        color: 'bg-yellow-500',
+        bg: 'bg-yellow-50 dark:bg-yellow-900/10',
+        text: 'text-yellow-500',
+        onClick: () => onSelectTemplate({ id: 'ugc', name: 'Product UGC', thumbnailUrl: '', variables: [], mode: 'UGC_PRODUCT', category: 'AI' })
     }
   ];
 
+  const filteredBasic = BASIC_TOOLS.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredMarketing = MARKETING_TOOLS.filter(t => t.title.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // AVATAR SELECTION VIEW
   if (view === 'AVATAR_SELECT') {
+      const filteredAvatars = avatars.filter(a => 
+        (genderFilter === 'ALL' || a.gender === genderFilter) && 
+        (a.name || '').toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      
       return (
-        <div className="h-full flex flex-col">
-            <div className="mb-8 flex items-center gap-4 flex-shrink-0">
-                <button 
-                    onClick={() => setView('DASHBOARD')}
-                    className="text-gray-700 hover:text-indigo-700 transition-colors font-medium flex items-center gap-1"
-                >
-                    &larr; Back
-                </button>
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900">Select Avatar</h2>
-                    <p className="text-gray-600 font-medium">Choose one of the available avatars.</p>
+        <div className="h-full flex flex-col p-4 md:p-8 overflow-hidden">
+            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between flex-shrink-0 gap-4">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => setView('DASHBOARD')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-600 dark:text-gray-300">
+                        <ArrowRight className="rotate-180" size={24} />
+                    </button>
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Select Avatar</h2>
+                        <p className="text-gray-500 dark:text-gray-400">Choose a presenter for your video.</p>
+                    </div>
+                </div>
+                <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl self-start md:self-auto">
+                    {(['ALL', 'male', 'female'] as const).map(filter => (
+                        <button key={filter} onClick={() => setGenderFilter(filter)} className={`px-4 py-1.5 rounded-lg text-sm font-bold capitalize transition-all ${genderFilter === filter ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>{filter === 'ALL' ? 'All' : filter}</button>
+                    ))}
                 </div>
             </div>
 
             {isLoading ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-20 gap-6">
-                    <div className="p-4 bg-indigo-50 rounded-full">
-                        <Loader2 className="animate-spin text-indigo-600" size={48} />
-                    </div>
-                    <p className="text-indigo-900 font-bold text-xl animate-pulse">..loading up your avatars</p>
+                <div className="flex-1 flex flex-col items-center justify-center">
+                    <Loader2 className="animate-spin text-indigo-600 dark:text-indigo-400 mb-4" size={40} />
+                    <p className="text-gray-500 dark:text-gray-400 animate-pulse">Loading avatars...</p>
                 </div>
             ) : (
-                <div className="flex flex-col h-full overflow-hidden">
-                    {/* Gender Filter Tabs */}
-                    {avatars.length > 0 && (
-                        <div className="flex justify-center mb-6 flex-shrink-0">
-                            <div className="bg-gray-100 p-1.5 rounded-xl inline-flex shadow-inner">
-                                {(['ALL', 'male', 'female'] as const).map((filter) => (
-                                    <button
-                                        key={filter}
-                                        onClick={() => setGenderFilter(filter)}
-                                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all duration-200 capitalize ${
-                                            genderFilter === filter 
-                                            ? 'bg-white text-indigo-600 shadow-sm transform scale-105' 
-                                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
-                                        }`}
-                                    >
-                                        {filter === 'ALL' ? 'All Avatars' : filter}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="flex-1 overflow-y-auto min-h-0 px-1 pb-10">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto w-full">
-                            {avatars.length === 0 ? (
-                                <div className="col-span-full text-center text-gray-500 py-10">
-                                    No avatars found. Please check your HeyGen API Key in Settings.
-                                </div>
-                            ) : filteredAvatars.length === 0 ? (
-                                <div className="col-span-full text-center text-gray-400 py-20 flex flex-col items-center">
-                                    <User size={48} className="mb-4 opacity-20" />
-                                    <p>No {genderFilter} avatars found.</p>
-                                </div>
-                            ) : (
-                                filteredAvatars.map(avatar => (
-                                    <div 
-                                        key={avatar.id}
-                                        className="group relative bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2"
-                                        onClick={() => handleSelectAvatar(avatar)}
-                                    >
-                                        <div className="aspect-[4/3] bg-gray-100 overflow-hidden relative">
-                                            <img 
-                                                src={avatar.previewUrl} 
-                                                alt={avatar.name} 
-                                                loading="lazy"
-                                                className="w-full h-full object-cover object-top transition-transform duration-700 group-hover:scale-105"
-                                                onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x400?text=Avatar'; }}
-                                            />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity duration-300" />
-                                            <div className="absolute bottom-4 left-4 text-white">
-                                                <h3 className="font-bold text-lg mb-0.5">{avatar.name}</h3>
-                                                <p className="text-xs font-medium opacity-90 uppercase tracking-wider">{avatar.gender}</p>
-                                            </div>
-                                            <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                                                 <span className="bg-white text-indigo-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-lg flex items-center gap-1">
-                                                    Select &rarr;
-                                                 </span>
-                                            </div>
-                                        </div>
+                <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {filteredAvatars.map(avatar => (
+                            <div key={avatar.id} onClick={() => handleSelectAvatar(avatar)} className="group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden cursor-pointer hover:-translate-y-1 hover:shadow-xl dark:hover:shadow-[0_0_15px_rgba(99,102,241,0.3)] dark:hover:border-indigo-500 transition-all duration-300">
+                                <div className="aspect-[3/4] relative overflow-hidden bg-gray-100 dark:bg-gray-900">
+                                    <img src={avatar.previewUrl} alt={avatar.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                                        <span className="text-white font-bold flex items-center gap-2">Select <ArrowRight size={16}/></span>
                                     </div>
-                                ))
-                            )}
-                        </div>
+                                </div>
+                                <div className="p-4">
+                                    <h3 className="font-bold text-gray-900 dark:text-white">{avatar.name}</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{avatar.gender}</p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
@@ -332,62 +275,228 @@ export const TemplateGallery: React.FC<TemplateGalleryProps> = ({ onSelectTempla
       );
   }
 
+  // MAIN DASHBOARD VIEW
   return (
-    <div className="h-full flex flex-col justify-center max-w-7xl mx-auto pb-10">
-      <div className="mb-10 text-center">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">What would you like to create?</h2>
-        <p className="text-gray-600 font-medium">Select a workflow to get started.</p>
-      </div>
+    <>
+    <div className="h-full overflow-y-auto p-4 md:p-8 no-scrollbar bg-gray-50 dark:bg-black">
+        <div className="max-w-7xl mx-auto pb-24 space-y-10">
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div>
+                <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">Studio Dashboard</h1>
+                <p className="text-gray-500 dark:text-gray-400 mt-1">Select a tool to start creating.</p>
+            </div>
+            <div className="relative w-full md:w-80">
+                <Search className="absolute left-4 top-3.5 text-gray-400" size={18} />
+                <input 
+                    type="text" 
+                    placeholder="Search tools..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl pl-12 pr-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                />
+            </div>
+        </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
-        {tools.map(tool => (
-            <div 
-                key={tool.id}
-                onClick={tool.status === 'COMING SOON' && tool.id === 'video_editor' ? undefined : tool.onClick}
-                className={`group bg-white rounded-3xl border border-gray-200 shadow-sm transition-all duration-300 flex flex-col relative overflow-hidden ${
-                    tool.status === 'LIVE' 
-                    ? 'hover:shadow-2xl hover:border-indigo-200 cursor-pointer' 
-                    : 'opacity-90 hover:opacity-100 cursor-pointer'
-                }`}
-            >
-                {/* Coming Soon Badge */}
-                {tool.status === 'COMING SOON' && (
-                    <div className="absolute top-4 right-4 z-30 bg-gray-900 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg border border-gray-700">
-                        COMING SOON
-                    </div>
-                )}
-
-                <div className={`h-40 overflow-hidden relative ${tool.bgClass.replace('/10', '/5')}`}>
-                    <div className={`absolute inset-0 ${tool.bgClass} group-hover:bg-transparent transition-colors z-10`} />
-                    <img 
-                        src={tool.imgUrl} 
-                        alt={tool.title} 
-                        loading="lazy"
-                        className={`w-full h-full object-cover transform transition-transform duration-700 ${
-                            tool.status === 'LIVE' 
-                            ? 'group-hover:scale-110' 
-                            : 'grayscale group-hover:grayscale-0'
-                        }`}
-                    />
-                    <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-sm">
-                        {React.cloneElement(tool.icon as React.ReactElement, { className: tool.colorClass })}
-                    </div>
+        {/* Contest Banner */}
+        <div className="bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 rounded-3xl p-6 md:p-8 text-white relative overflow-hidden shadow-xl shadow-orange-500/20 group cursor-pointer hover:scale-[1.01] transition-transform">
+            <div className="absolute -right-10 -bottom-10 opacity-20 rotate-12 group-hover:rotate-6 transition-transform duration-700">
+                <Trophy size={240} />
+            </div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            
+            <div className="relative z-10">
+                <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/30 mb-4 shadow-sm">
+                    <Flame size={12} className="text-yellow-200 fill-yellow-200" /> 
+                    Live Contest
                 </div>
+                <h2 className="text-3xl md:text-5xl font-black mb-4 tracking-tight drop-shadow-sm">
+                    Enter our Clipping Contest
+                </h2>
+                <p className="text-lg md:text-xl font-medium text-white/95 leading-relaxed mb-8 max-w-2xl drop-shadow-sm">
+                    For every <span className="font-extrabold bg-white/20 px-2 py-0.5 rounded-lg border border-white/20">1,000 views</span> you get with videos created on LoopGenie, we pay you <span className="font-extrabold text-yellow-100">$1</span>.
+                </p>
+                <button 
+                    onClick={() => onSelectTemplate({ id: 'shorts', name: 'Shorts Maker', thumbnailUrl: '', variables: [], mode: 'SHORTS', category: 'AI' })}
+                    className="bg-white text-orange-600 px-8 py-3.5 rounded-xl font-bold text-sm shadow-lg hover:bg-gray-50 hover:shadow-xl transition-all flex items-center gap-2 group-hover:gap-3"
+                >
+                    Start Creating Now <ArrowRight size={18} />
+                </button>
+            </div>
+        </div>
 
-                <div className="p-6 flex flex-col flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{tool.title}</h3>
-                    <p className="text-gray-500 font-medium text-sm leading-relaxed mb-4">
-                        {tool.description}
-                    </p>
-                    <span className={`mt-auto font-bold text-sm flex items-center gap-2 transition-all ${
-                        tool.status === 'LIVE' ? tool.colorClass + ' group-hover:gap-3' : 'text-gray-400'
-                    }`}>
-                        {tool.cta} <span className="text-lg">&rarr;</span>
-                    </span>
+        {/* Basic Tools */}
+        <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Sparkles className="text-indigo-500" size={18} /> Basic Tools
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {filteredBasic.map(tool => (
+                    <button 
+                        key={tool.id} 
+                        onClick={tool.onClick}
+                        className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 p-5 rounded-2xl flex flex-col items-center text-center gap-4 hover:border-indigo-400 dark:hover:border-indigo-500 hover:scale-[1.02] hover:shadow-lg dark:hover:shadow-[0_0_15px_rgba(99,102,241,0.2)] transition-all duration-300 group"
+                    >
+                        <div className={`p-4 rounded-full ${tool.bg} ${tool.text} group-hover:scale-110 transition-transform shadow-sm`}>
+                            {tool.icon}
+                        </div>
+                        <div>
+                            <div className="font-bold text-gray-900 dark:text-white text-sm">{tool.title}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{tool.desc}</div>
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </div>
+
+        {/* Marketing Tools */}
+        <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Clapperboard className="text-rose-500" size={18} /> Marketing Tools
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {filteredMarketing.map(tool => (
+                    <div 
+                        key={tool.id}
+                        onClick={tool.onClick}
+                        className="group bg-white dark:bg-gray-900 rounded-3xl border border-gray-100 dark:border-gray-800 p-6 cursor-pointer hover:-translate-y-1 hover:shadow-xl dark:hover:shadow-[0_0_20px_rgba(244,63,94,0.15)] dark:hover:border-rose-500/30 transition-all duration-300 relative overflow-hidden"
+                    >
+                        {tool.isHot && (
+                            <div className="absolute top-4 right-4 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg animate-pulse">
+                                HOT
+                            </div>
+                        )}
+                        
+                        <div className="flex items-start justify-between mb-6">
+                            <div className={`w-14 h-14 ${tool.bg} rounded-2xl flex items-center justify-center ${tool.text}`}>
+                                {tool.icon}
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800 rounded-full p-2 group-hover:bg-indigo-50 dark:group-hover:bg-indigo-900/20 transition-colors">
+                                <ArrowRight size={16} className="text-gray-400 group-hover:text-indigo-500 transition-colors" />
+                            </div>
+                        </div>
+                        
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{tool.title}</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{tool.desc}</p>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* Active Clipping Campaigns Section */}
+        <div>
+             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Target className="text-green-500" size={18} /> Active Campaigns (Clipping)
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {CLIPPING_PROJECTS.map(project => (
+                    <div 
+                        key={project.id}
+                        onClick={() => setSelectedCampaign(project)}
+                        className="bg-gray-900 rounded-3xl overflow-hidden relative group cursor-pointer border border-gray-800 hover:border-green-500/50 hover:shadow-2xl transition-all duration-300"
+                    >
+                        <div className="h-40 relative">
+                             <img src={project.thumbnail} className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
+                             <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent" />
+                             <div className="absolute top-4 left-4 bg-green-500 text-black text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wide">
+                                {project.category}
+                             </div>
+                             <div className="absolute top-4 right-4 bg-black/60 text-white backdrop-blur-sm text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1">
+                                <DollarSign size={12} className="text-green-400" />
+                                {project.payout_model}
+                             </div>
+                        </div>
+                        <div className="p-6 pt-2">
+                             <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">{project.brand}</div>
+                             <h3 className="text-xl font-bold text-white mb-3 group-hover:text-green-400 transition-colors">{project.title}</h3>
+                             <div className="flex items-center gap-3 text-sm text-gray-400">
+                                 <span className="flex items-center gap-1"><Trophy size={14} className="text-yellow-500" /> Pool: {project.reward_pool}</span>
+                             </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* Recent Activity */}
+        {recentProjects.length > 0 && (
+            <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Recent Projects</h2>
+                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                    {recentProjects.slice(0, 5).map((p, i) => (
+                        <div key={i} className="min-w-[220px] h-36 rounded-2xl bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden relative group cursor-pointer hover:border-indigo-400 transition-colors">
+                            <img src={p.thumbnailUrl || 'https://via.placeholder.com/200x120'} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="" />
+                            <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 to-transparent">
+                                <p className="text-white text-xs font-bold truncate">{p.templateName}</p>
+                                <p className="text-gray-300 text-[10px]">{new Date(p.createdAt).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
-        ))}
-      </div>
+        )}
+        </div>
     </div>
+
+    {/* Campaign Details Modal */}
+    {selectedCampaign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-2xl bg-gray-900 rounded-3xl border border-gray-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="relative h-48 flex-shrink-0">
+                    <img src={selectedCampaign.thumbnail} className="w-full h-full object-cover opacity-50" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent" />
+                    <button 
+                        onClick={() => setSelectedCampaign(null)}
+                        className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-white/20 rounded-full text-white transition-colors backdrop-blur-md"
+                    >
+                        <X size={20} />
+                    </button>
+                    <div className="absolute bottom-6 left-6">
+                        <div className="text-green-400 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <Target size={14} /> {selectedCampaign.brand}
+                        </div>
+                        <h2 className="text-3xl font-black text-white">{selectedCampaign.title}</h2>
+                    </div>
+                </div>
+                
+                <div className="p-6 md:p-8 overflow-y-auto">
+                    <div className="flex flex-col md:flex-row gap-8 mb-8">
+                        <div className="flex-1">
+                            <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">The Brief</h3>
+                            <p className="text-gray-300 leading-relaxed">{selectedCampaign.brief}</p>
+                        </div>
+                        <div className="w-full md:w-48 flex-shrink-0 bg-gray-800 rounded-xl p-4 border border-gray-700">
+                             <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">Payout Structure</h4>
+                             <div className="text-2xl font-bold text-white mb-1">{selectedCampaign.payout_model}</div>
+                             <div className="text-xs text-yellow-500 flex items-center gap-1">
+                                 <Trophy size={12} /> Pool: {selectedCampaign.reward_pool}
+                             </div>
+                        </div>
+                    </div>
+                    
+                    <div className="mb-8">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Requirements</h3>
+                        <ul className="space-y-3">
+                            {selectedCampaign.requirements.map((req, i) => (
+                                <li key={i} className="flex items-start gap-3 text-gray-300">
+                                    <CheckCircle2 size={18} className="text-green-500 mt-0.5 flex-shrink-0" />
+                                    <span>{req}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    
+                    <button 
+                        onClick={() => handleStartCampaign(selectedCampaign)}
+                        className="w-full py-4 bg-green-600 hover:bg-green-500 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-900/20 transition-all flex items-center justify-center gap-2 hover:scale-[1.01]"
+                    >
+                        <Clapperboard size={20} /> Start Creating Clip
+                    </button>
+                </div>
+            </div>
+        </div>
+    )}
+    </>
   );
 };
